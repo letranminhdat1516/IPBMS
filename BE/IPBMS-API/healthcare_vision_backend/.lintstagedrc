@@ -1,0 +1,4 @@
+{
+  "*.{ts,js}": ["eslint --fix --quiet", "prettier --write --loglevel silent"],
+  "*.{json,md,yml,yaml}": ["prettier --write --loglevel silent"]
+}

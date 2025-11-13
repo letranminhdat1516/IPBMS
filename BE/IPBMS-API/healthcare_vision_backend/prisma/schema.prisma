@@ -1,0 +1,1955 @@
+generator client {
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "linux-musl", "linux-musl-arm64-openssl-3.0.x"]
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DATABASE_URL")
+}
+
+/// *
+/// * ACTIVITY LOGS - Comprehensive audit trail system
+/// * Purpose: Records all significant system activities for compliance, debugging, and monitoring
+/// * Features:
+/// * - Row Level Security (RLS) enabled for data isolation
+/// * - Tracks user actions, system events, and administrative operations
+/// * - Supports both authenticated and anonymous actions
+/// * - JSON metadata for flexible additional context
+/// * Use Cases:
+/// * - Security auditing and compliance reporting
+/// * - Debugging user-reported issues
+/// * - System monitoring and performance analysis
+/// * - Legal evidence collection for healthcare compliance
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model activity_logs {
+  id            String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  timestamp     DateTime               @default(now()) @db.Timestamptz(6)
+  actor_id      String?                @db.Uuid
+  actor_name    String?                @db.VarChar(255)
+  action        String                 @db.VarChar(100)
+  resource_type String?                @db.VarChar(100)
+  resource_id   String?                @db.VarChar(100)
+  message       String?
+  severity      activity_severity_enum @default(info)
+  meta          Json?
+  ip            String?                @db.VarChar(50)
+  action_enum   activity_action_enum?
+  resource_name String?                @db.VarChar
+  users         users?                 @relation(fields: [actor_id], references: [user_id], map: "fk_activity_logs_actor")
+
+  @@index([actor_id], map: "idx_al_actor")
+  @@index([action], map: "idx_al_action")
+  @@index([resource_type], map: "idx_al_resource_type")
+  @@index([severity], map: "idx_al_severity")
+  @@index([timestamp], map: "idx_al_timestamp")
+}
+
+/// *
+/// * CAMERAS - AI vision camera management system
+/// * Purpose: Manages all cameras used for AI-powered healthcare monitoring
+/// * Features:
+/// * - Supports multiple camera types (IP cameras, USB, wireless)
+/// * - Real-time status monitoring with heartbeat tracking
+/// * - Flexible configuration for different hardware setups
+/// * - Location tracking for spatial context in events
+/// * Security Notes:
+/// * - Camera credentials are stored encrypted
+/// * - IP addresses are tracked for network security
+/// * - Row Level Security ensures users only see their own cameras
+/// * Integration:
+/// * - Connected to events for AI detection context
+/// * - Linked to snapshots for visual evidence
+/// * - Monitored via heartbeat system for uptime tracking
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model cameras {
+  camera_id         String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id           String             @db.Uuid
+  camera_name       String             @db.VarChar(100)
+  camera_type       camera_type_enum   @default(ip)
+  ip_address        String?            @db.VarChar(45)
+  port              Int?               @default(80)
+  rtsp_url          String?            @db.VarChar(255)
+  username          String?            @db.VarChar(50)
+  password          String?            @db.VarChar(100)
+  location_in_room  String?            @db.VarChar(50)
+  resolution        String?            @default("1920x1080") @db.VarChar(20)
+  fps               Int?               @default(30)
+  status            camera_status_enum @default(active)
+  last_ping         DateTime?          @db.Timestamptz(6)
+  is_online         Boolean            @default(true)
+  last_heartbeat_at DateTime?          @db.Timestamptz(6)
+  created_at        DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime           @updatedAt @db.Timestamptz(6)
+  users             users              @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+  events            events[]
+  snapshots         snapshots[]
+
+  @@index([last_ping], map: "idx_cameras_last_ping")
+  @@index([status], map: "idx_cameras_status")
+  @@index([camera_type], map: "idx_cameras_type")
+  @@index([ip_address], map: "idx_cameras_ip_address")
+}
+
+/// *
+/// * CAREGIVER INVITATIONS - Professional caregiver assignment system
+/// * Purpose: Manages the relationship between professional caregivers and customers
+/// * Features:
+/// * - Invitation-based assignment workflow
+/// * - Time-bounded assignments with start/end dates
+/// * - Status tracking (pending, accepted, rejected, expired)
+/// * - Assignment history for compliance and billing
+/// * Business Logic:
+/// * - Customers can invite multiple caregivers
+/// * - Caregivers can accept or reject invitations
+/// * - Active assignments enable caregiver access to customer data
+/// * - Assignments can be revoked by customers or admins
+/// * Privacy & Security:
+/// * - Row Level Security ensures data access control
+/// * - Assignment history is preserved for audit purposes
+/// * - Sensitive assignment notes are protected
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model caregiver_invitations {
+  assignment_id    String                           @id(map: "caregiver_patient_assignments_pkey") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  caregiver_id     String                           @db.Uuid
+  customer_id      String                           @db.Uuid
+  assigned_at      DateTime                         @default(now()) @db.Timestamptz(6)
+  unassigned_at    DateTime?                        @db.Timestamptz(6)
+  is_active        Boolean                          @default(true)
+  assigned_by      String?                          @db.Uuid
+  assignment_notes String?
+  responded_at     DateTime?                        @db.Timestamptz(6)
+  expires_at       DateTime?                        @db.Timestamptz(6)
+  response_reason  String?                          @db.VarChar(255)
+  status           caregiver_invitation_status_enum @default(pending)
+  users            users?                           @relation(fields: [assigned_by], references: [user_id], map: "caregiver_assignments_assigned_by_fkey")
+}
+
+/// *
+/// * EMERGENCY CONTACTS - Critical contact information for emergency situations
+/// * Purpose: Stores prioritized emergency contact information for rapid response
+/// * Features:
+/// * - Hierarchical alert levels for escalation procedures
+/// * - Relationship context for appropriate communication
+/// * - Duplicate phone number prevention per user
+/// * - Soft deletion for historical preservation
+/// * Alert Level System:
+/// * - Level 1: Primary emergency contact (immediate notification)
+/// * - Level 2: Secondary contact (if primary unavailable)
+/// * - Level 3: Tertiary contact (extended network)
+/// * Integration:
+/// * - Used by emergency notification system
+/// * - Integrated with AI event escalation logic
+/// * - Supports SMS, phone call, and push notification routing
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model emergency_contacts {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id     String   @db.Uuid
+  name        String   @db.VarChar(100)
+  relation    String   @db.VarChar(50)
+  phone       String   @db.VarChar(20)
+  alert_level Int      @db.SmallInt
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime @updatedAt @db.Timestamptz(6)
+  is_deleted  Boolean  @default(false)
+  users       users    @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  @@unique([user_id, phone], map: "unique_user_phone")
+  @@index([user_id], map: "idx_emergency_contacts_user_id")
+  @@index([alert_level], map: "idx_emergency_contacts_alert_level")
+  @@index([phone], map: "idx_emergency_contacts_phone")
+}
+
+/// *
+/// * EVENTS TABLE - Core Event Detection and Management System
+/// * PURPOSE:
+/// * - Central repository for all AI-detected events from camera systems
+/// * - Manages complete event lifecycle from detection to resolution
+/// * - Handles event confirmation workflows and status changes
+/// * - Tracks event verification, acknowledgment, and dismissal processes
+/// * KEY FEATURES:
+/// * - AI-powered event detection with confidence scoring
+/// * - Multi-stage confirmation workflow (detected → proposed → confirmed/rejected)
+/// * - Rich metadata storage (detection data, AI analysis, bounding boxes)
+/// * - Time-based event progression tracking
+/// * - Comprehensive audit trail integration
+/// * BUSINESS LOGIC:
+/// * - Events are auto-detected by AI vision systems
+/// * - Users can propose status changes for review by caregivers
+/// * - Pending proposals expire after 48 hours (auto-approve/reject)
+/// * - Events can be verified, acknowledged, or dismissed by authorized users
+/// * - Status changes trigger notification workflows
+/// * CONFIRMATION WORKFLOW:
+/// * - DETECTED: Initial AI detection state
+/// * - PROPOSED: User suggested status change pending review
+/// * - CONFIRMED: Caregiver approved the status change
+/// * - REJECTED: Caregiver rejected the status change
+/// * - ABANDONED: No action taken within time limit
+/// * SECURITY CONSIDERATIONS:
+/// * - Row Level Security (RLS) enabled for user data isolation
+/// * - Cascade deletion maintains referential integrity
+/// * - Sensitive AI data stored in encrypted JSON fields
+/// * - Access controlled through user roles and permissions
+/// * PERFORMANCE OPTIMIZATIONS:
+/// * - Multi-column indexes for common query patterns
+/// * - Separate indexes for time-based operations
+/// * - Optimized for user-date range queries
+/// * INTEGRATIONS:
+/// * - Cameras: Source device for event detection
+/// * - Snapshots: Visual evidence storage
+/// * - Users: Event ownership and verification tracking
+/// * - Notifications: Alert delivery system
+/// * - Event History: Complete audit trail
+/// * DATA RETENTION:
+/// * - Events retained per subscription tier limits
+/// * - Automated cleanup of expired events
+/// * - Snapshot data managed separately for storage optimization
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model events {
+  notes                  String?
+  event_id               String                         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  snapshot_id            String                         @db.Uuid
+  user_id                String                         @db.Uuid
+  camera_id              String                         @db.Uuid
+  event_type             event_type_enum
+  event_description      String?
+  detection_data         Json?
+  ai_analysis_result     Json?
+  confidence_score       Decimal?                       @default(0.00) @db.Decimal(5, 4)
+  bounding_boxes         Json?
+  context_data           Json?
+  detected_at            DateTime                       @default(now()) @db.Timestamptz(6)
+  verified_at            DateTime?                      @db.Timestamptz(6)
+  verified_by            String?                        @db.Uuid
+  acknowledged_at        DateTime?                      @db.Timestamptz(6)
+  acknowledged_by        String?                        @db.Uuid
+  dismissed_at           DateTime?                      @db.Timestamptz(6)
+  created_at             DateTime                       @default(now()) @db.Timestamptz(6)
+  confirm_status         Boolean?                       @map("confirm_status")
+  status                 event_status_enum?
+  confirmation_state     confirmation_state_enum        @default(DETECTED)
+  pending_until          DateTime?                      @db.Timestamptz(6)
+  proposed_reason        String?
+  proposed_by            String?                        @db.Uuid
+  proposed_status        event_status_enum?
+  proposed_event_type    event_type_enum?
+  auto_escalation_reason String?
+  escalated_at           DateTime?                      @db.Timestamptz(6)
+  escalation_count       Int                            @default(0)
+  is_canceled            Boolean                        @default(false)
+  last_action_at         DateTime?                      @db.Timestamptz(6)
+  last_action_by         String?                        @db.Uuid
+  pending_since          DateTime?                      @db.Timestamptz(6)
+  verification_status    event_verification_status_enum @default(PENDING)
+  notification_attempts  Int                            @default(0)
+  lifecycle_state        event_lifecycle_enum           @default(NOTIFIED)
+  reliability_score      Decimal?                       @default(0.0000) @db.Decimal(5, 4)
+  cameras                cameras                        @relation(fields: [camera_id], references: [camera_id], onDelete: Cascade)
+  snapshots              snapshots                      @relation(fields: [snapshot_id], references: [snapshot_id], onDelete: Cascade)
+  user                   users                          @relation("events_user_idTousers", fields: [user_id], references: [user_id], onDelete: Cascade)
+  verified_by_user       users?                         @relation("events_verified_byTousers", fields: [verified_by], references: [user_id])
+  event_history          event_history[]
+  notifications          notifications[]
+
+  @@index([acknowledged_at], map: "idx_ed_ack_at")
+  @@index([camera_id], map: "idx_ed_camera")
+  @@index([confidence_score], map: "idx_ed_conf")
+  @@index([reliability_score], map: "idx_ed_reliab")
+  @@index([detected_at], map: "idx_ed_detected")
+  @@index([dismissed_at], map: "idx_ed_dismissed_at")
+  @@index([snapshot_id], map: "idx_ed_snapshot")
+  @@index([event_type], map: "idx_ed_type")
+  @@index([user_id], map: "idx_ed_user")
+  @@index([verified_by], map: "idx_ed_verified_by")
+  @@index([confirmation_state, pending_until], map: "idx_ed_confstate_pending")
+  @@index([lifecycle_state], map: "idx_events_lifecycle_state")
+  @@index([user_id, detected_at], map: "idx_events_user_date")
+  @@map("event_detections")
+}
+
+/// *
+/// * EVENT HISTORY TABLE - Comprehensive Event Audit Trail System
+/// * PURPOSE:
+/// * - Complete audit trail for all event-related actions and state changes
+/// * - Track user interactions and system automated processes
+/// * - Provide detailed analytics and reporting capabilities
+/// * - Support compliance and accountability requirements
+/// * KEY FEATURES:
+/// * - Immutable history records for all event changes
+/// * - Rich metadata storage for complex action context
+/// * - Response time tracking for performance analysis
+/// * - First-action detection for caregiver workflow optimization
+/// * - Multi-dimensional status change tracking
+/// * TRACKED ACTIONS:
+/// * - DETECTED: Initial AI event detection
+/// * - PROPOSED: User-initiated status change proposals
+/// * - CONFIRMED: Caregiver approval of proposed changes
+/// * - REJECTED: Caregiver rejection of proposed changes
+/// * - AUTO_APPROVED: System automatic approval after timeout
+/// * - AUTO_REJECTED: System automatic rejection for dangerous events
+/// * - VERIFIED: Manual verification by authorized users
+/// * - ACKNOWLEDGED: User acknowledgment of event
+/// * - DISMISSED: Event dismissal action
+/// * - ABANDONED: System marking of inactive events
+/// * - CAREGIVER_INVITED: New caregiver invitation sent
+/// * - CAREGIVER_ACTION: Subsequent caregiver actions
+/// * BUSINESS INTELLIGENCE:
+/// * - Response time analysis for caregiver performance
+/// * - Event abandonment rate tracking
+/// * - User engagement metrics
+/// * - System automation effectiveness
+/// * - Caregiver workflow optimization data
+/// * SECURITY CONSIDERATIONS:
+/// * - Row Level Security (RLS) enabled for data isolation
+/// * - Immutable records prevent data tampering
+/// * - Sensitive metadata encrypted in JSON fields
+/// * - Actor identification for accountability
+/// * PERFORMANCE FEATURES:
+/// * - Indexed for common reporting queries
+/// * - Optimized for time-series analysis
+/// * - Efficient actor-based lookups
+/// * - Event-grouped operations support
+/// * INTEGRATIONS:
+/// * - Events: Parent event relationship
+/// * - Users: Actor identification and role tracking
+/// * - Notifications: Audit trail for message delivery
+/// * - Analytics: Data source for reporting dashboards
+/// * DATA LIFECYCLE:
+/// * - Permanent retention for audit compliance
+/// * - Automated archival for old records
+/// * - Real-time statistics computation
+/// * - Historical trend analysis support
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model event_history {
+  history_id                  String                    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  event_id                    String                    @db.Uuid
+  action                      event_history_action_enum
+  actor_id                    String?                   @db.Uuid
+  actor_name                  String?                   @db.VarChar(255)
+  actor_role                  String?                   @db.VarChar(50)
+  previous_status             String?                   @db.VarChar(50)
+  new_status                  String?                   @db.VarChar(50)
+  previous_event_type         event_type_enum?
+  new_event_type              event_type_enum?
+  previous_confirmation_state confirmation_state_enum?
+  new_confirmation_state      confirmation_state_enum?
+  reason                      String?
+  metadata                    Json?
+  created_at                  DateTime                  @default(now()) @db.Timestamptz(6)
+  response_time_minutes       Int?
+  is_first_action             Boolean?                  @default(false)
+  actor                       users?                    @relation(fields: [actor_id], references: [user_id])
+  event                       events                    @relation(fields: [event_id], references: [event_id], onDelete: Cascade)
+
+  @@index([event_id], map: "idx_event_history_event_id")
+  @@index([action], map: "idx_event_history_action")
+  @@index([actor_id], map: "idx_event_history_actor_id")
+  @@index([created_at], map: "idx_event_history_created_at")
+  @@index([event_id, action], map: "idx_event_history_event_action")
+  @@index([event_id, created_at], map: "idx_event_history_timeline")
+}
+
+/// *
+/// * DEVICE TOKENS TABLE - Push Notification Device Management
+/// * PURPOSE:
+/// * - Manages Firebase Cloud Messaging (FCM) device tokens for push notifications
+/// * - Tracks user devices across multiple platforms (iOS, Android, Web)
+/// * - Handles token lifecycle management and automatic cleanup
+/// * - Supports targeted messaging and topic subscriptions
+/// * KEY FEATURES:
+/// * - Multi-platform device token storage (iOS, Android, Web)
+/// * - Automatic token refresh and validation
+/// * - Device metadata tracking for analytics
+/// * - Topic-based subscription management
+/// * - Token revocation and cleanup mechanisms
+/// * BUSINESS LOGIC:
+/// * - One user can have multiple active devices
+/// * - Tokens are automatically refreshed by client applications
+/// * - Inactive tokens are marked and cleaned up periodically
+/// * - Device metadata helps with debugging and analytics
+/// * - Topic subscriptions enable targeted messaging
+/// * NOTIFICATION WORKFLOW:
+/// * - Devices register tokens on app launch
+/// * - Tokens are validated before message sending
+/// * - Failed deliveries trigger token cleanup
+/// * - Topics allow group messaging (e.g., all caregivers)
+/// * SECURITY CONSIDERATIONS:
+/// * - Row Level Security (RLS) enabled for user data isolation
+/// * - Tokens are unique and validated against FCM
+/// * - Revoked tokens are marked but retained for audit
+/// * - Device information helps identify suspicious activity
+/// * PERFORMANCE OPTIMIZATIONS:
+/// * - Unique indexes prevent duplicate tokens
+/// * - User-device composite keys for efficient lookups
+/// * - Active token filtering for message targeting
+/// * - Batch operations for token management
+/// * INTEGRATIONS:
+/// * - Users: Device ownership tracking
+/// * - FCM Service: Token validation and messaging
+/// * - Notifications: Message delivery tracking
+/// * - Analytics: Device usage statistics
+/// * DATA LIFECYCLE:
+/// * - Tokens expire based on platform policies
+/// * - Inactive tokens cleaned up automatically
+/// * - Device metadata retained for analytics
+/// * - Revocation history maintained for security
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model device_tokens {
+  token_id     String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id      String             @db.Uuid
+  device_id    String?            @db.VarChar(100)
+  token        String             @unique
+  platform     push_platform_enum
+  app_version  String?            @db.VarChar(50)
+  device_model String?            @db.VarChar(100)
+  os_version   String?            @db.VarChar(50)
+  topics       Json?
+  is_active    Boolean            @default(true)
+  last_used_at DateTime?          @db.Timestamptz(6)
+  revoked_at   DateTime?          @db.Timestamptz(6)
+  created_at   DateTime           @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime           @updatedAt @db.Timestamptz(6)
+  users        users              @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  @@unique([user_id, device_id], map: "unique_fcm_user_device")
+  @@index([is_active], map: "idx_fcm_active")
+  @@index([last_used_at], map: "idx_fcm_last_used")
+  @@index([platform], map: "idx_fcm_platform")
+  @@index([user_id], map: "idx_fcm_user")
+  @@map("fcm_tokens")
+}
+
+/// Patient sleep checkins - daily records for user's sleep checkin
+model patient_sleep_checkins {
+  id                        String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id                   String                     @db.Uuid
+  state                     String                     @db.VarChar(100)
+  meta                      Json?
+  created_at                DateTime                   @default(now()) @db.Timestamptz(6)
+  updated_at                DateTime                   @updatedAt @db.Timestamptz(6)
+  habit_id                  String?                    @db.Uuid
+  medical_history_id        String?                    @db.Uuid
+  supplement_id             String?                    @db.Uuid
+  checkin_at                DateTime                   @default(now()) @db.Timestamptz(6)
+  patient_habits            patient_habits?            @relation(fields: [habit_id], references: [habit_id])
+  patient_medical_histories patient_medical_histories? @relation(fields: [medical_history_id], references: [id])
+  patient_supplements       patient_supplements?       @relation(fields: [supplement_id], references: [id])
+  users                     users                      @relation(fields: [user_id], references: [user_id])
+
+  @@index([user_id, checkin_at])
+  @@index([habit_id], map: "idx_sleep_habit")
+  @@index([medical_history_id], map: "idx_sleep_medical_history")
+  @@index([supplement_id], map: "idx_sleep_supplement")
+  @@map("patient_sleep_checkins")
+}
+
+/// *
+/// * NOTIFICATIONS TABLE - Comprehensive Message Delivery System
+/// * PURPOSE:
+/// * - Central hub for all system notifications and alerts
+/// * - Manages push notifications, email alerts, and in-app messages
+/// * - Tracks delivery status and user interactions
+/// * - Supports emergency alert escalation workflows
+/// * KEY FEATURES:
+/// * - Multi-channel notification delivery (push, email, in-app)
+/// * - Severity-based alert prioritization
+/// * - Delivery status tracking with retry mechanisms
+/// * - User acknowledgment and read receipt tracking
+/// * - Rich delivery metadata for debugging and analytics
+/// * NOTIFICATION TYPES:
+/// * - EVENT_ALERT: AI-detected event notifications
+/// * - CONFIRMATION_REQUEST: Event status change requests
+/// * - CAREGIVER_INVITATION: Care team invitations
+/// * - SYSTEM_UPDATE: Platform updates and maintenance
+/// * - EMERGENCY_ALERT: High-priority safety notifications
+/// * SEVERITY LEVELS:
+/// * - LOW: Informational messages
+/// * - MEDIUM: Standard alerts requiring attention
+/// * - HIGH: Urgent notifications requiring immediate action
+/// * - CRITICAL: Emergency alerts with escalation procedures
+/// * DELIVERY WORKFLOW:
+/// * - PENDING: Created but not yet sent
+/// * - SENT: Delivered to messaging service
+/// * - DELIVERED: Confirmed receipt by client
+/// * - FAILED: Delivery attempt failed
+/// * - RETRY: Queued for retry attempt
+/// * BUSINESS LOGIC:
+/// * - Emergency alerts bypass quiet hours
+/// * - Failed deliveries trigger retry mechanisms
+/// * - User preferences control notification channels
+/// * - Acknowledgment tracking for accountability
+/// * - Delivery analytics for optimization
+/// * SECURITY CONSIDERATIONS:
+/// * - Row Level Security (RLS) enabled for user data isolation
+/// * - Sensitive delivery data encrypted in JSON fields
+/// * - Message content filtered for safety
+/// * - Access controlled through user permissions
+/// * PERFORMANCE OPTIMIZATIONS:
+/// * - Indexed for user-based queries
+/// * - Event-notification linking for context
+/// * - Retry count tracking for failure analysis
+/// * - Time-based indexes for delivery monitoring
+/// * INTEGRATIONS:
+/// * - Events: Source context for event-based notifications
+/// * - Users: Recipient and acknowledgment tracking
+/// * - Device Tokens: Push notification delivery
+/// * - FCM Service: Message delivery infrastructure
+/// * DATA RETENTION:
+/// * - Notifications retained per user subscription tier
+/// * - Read notifications archived after retention period
+/// * - Delivery metadata preserved for analytics
+/// * - Failed notifications kept for debugging
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model notifications {
+  notification_id String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id         String                  @db.Uuid
+  event_id        String?                 @db.Uuid
+  severity        severity_enum           @default(medium)
+  title           String?                 @db.VarChar(255)
+  message         String
+  delivery_data   Json?
+  status          notif_status_enum       @default(pending)
+  sent_at         DateTime?               @db.Timestamptz(6)
+  delivered_at    DateTime?               @db.Timestamptz(6)
+  priority        String?                 @db.VarChar(50)
+  retry_count     Int?                    @default(0)
+  error_message   String?
+  read_at         DateTime?               @db.Timestamptz(6)
+  acknowledged_by String?                 @db.Uuid
+  acknowledged_at DateTime?               @db.Timestamptz(6)
+  created_at      DateTime                @default(now()) @db.Timestamptz(6)
+  resolved_at     DateTime?               @db.Timestamptz(6)
+  channel         channel_enum            @default(push)
+  business_type   notification_type_enum? @default(event_alert) @map("business_type")
+  acknowledger    users?                  @relation("notifications_acknowledger", fields: [acknowledged_by], references: [user_id])
+  events          events?                 @relation(fields: [event_id], references: [event_id], onDelete: Cascade)
+  users           users                   @relation("notifications_user", fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  @@index([user_id], map: "idx_notif_user")
+  @@index([event_id], map: "idx_notif_event")
+  @@index([retry_count], map: "idx_notif_retry")
+  @@index([sent_at], map: "idx_notif_sent")
+  @@index([status], map: "idx_notif_status")
+  @@index([read_at], map: "idx_notif_read")
+  @@index([severity], map: "idx_notif_severity")
+  @@index([created_at], map: "idx_notif_created")
+  @@index([acknowledged_by], map: "idx_notif_ack_by")
+}
+
+/// *
+/// * PATIENT HABITS TABLE - Daily Living Activity Management
+/// * PURPOSE:
+/// * - Track patient daily routines and behavioral patterns
+/// * - Monitor medication schedules and supplement compliance
+/// * - Support care plan development and monitoring
+/// * - Enable personalized care recommendations
+/// * KEY FEATURES:
+/// * - Comprehensive habit type categorization
+/// * - Flexible scheduling with frequency patterns
+/// * - Location-based habit tracking
+/// * - Integration with supplement management
+/// * - Active/inactive habit lifecycle management
+/// * HABIT TYPES:
+/// * - MEDICATION: Prescription drug schedules
+/// * - SUPPLEMENT: Nutritional supplement routines
+/// * - EXERCISE: Physical activity patterns
+/// * - SLEEP: Sleep schedule tracking
+/// * - MEAL: Eating patterns and schedules
+/// * - SOCIAL: Social interaction activities
+/// * FREQUENCY PATTERNS:
+/// * - DAILY: Every day routines
+/// * - WEEKLY: Specific days of the week
+/// * - MONTHLY: Monthly recurring activities
+/// * - AS_NEEDED: Situational or emergency habits
+/// * BUSINESS LOGIC:
+/// * - Habits can be temporarily deactivated without deletion
+/// * - Sleep habits track start and end times
+/// * - Location tracking helps with context-aware monitoring
+/// * - Supplement habits link to medication records
+/// * - Frequency data supports compliance monitoring
+/// * CARE INTEGRATION:
+/// * - Habits inform AI event detection (expected vs. unexpected behaviors)
+/// * - Care team can monitor compliance and adherence
+/// * - Deviation alerts trigger when habits are not followed
+/// * - Historical data supports care plan adjustments
+/// * SECURITY CONSIDERATIONS:
+/// * - Row Level Security (RLS) enabled for patient privacy
+/// * - Sensitive health data protected by HIPAA compliance
+/// * - Access controlled through caregiver permissions
+/// * - Audit trail maintained for all changes
+/// * INTEGRATIONS:
+/// * - Users: Patient ownership and care team access
+/// * - Patient Supplements: Medication and supplement tracking
+/// * - Events: Habit compliance monitoring through AI
+/// * - Care Plans: Habit-based care recommendations
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model patient_habits {
+  habit_id               String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  habit_type             habit_type_enum
+  habit_name             String                   @db.VarChar(200)
+  description            String?
+  frequency              frequency_enum           @default(daily)
+  days_of_week           Json?
+  location               String?                  @db.VarChar(100)
+  notes                  String?
+  is_active              Boolean                  @default(true)
+  created_at             DateTime                 @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime                 @updatedAt @db.Timestamptz(6)
+  supplement_id          String?                  @db.Uuid
+  user_id                String                   @db.Uuid
+  sleep_start            DateTime?                @db.Time(6)
+  sleep_end              DateTime?                @db.Time(6)
+  patient_supplements    patient_supplements?     @relation(fields: [supplement_id], references: [id], onDelete: Cascade)
+  users                  users                    @relation("UserPatientHabits", fields: [user_id], references: [user_id], onDelete: Cascade)
+  patient_sleep_checkins patient_sleep_checkins[]
+
+  @@index([frequency], map: "idx_ph_frequency")
+  @@index([habit_type], map: "idx_ph_habit_type")
+  @@index([is_active], map: "idx_ph_is_active")
+  @@index([supplement_id], map: "idx_ph_supplement")
+  @@index([user_id], map: "idx_ph_user_id")
+}
+
+/// *
+/// * PATIENT MEDICAL HISTORIES TABLE - Healthcare Record Management
+/// * PURPOSE:
+/// * - Store comprehensive patient medical history records
+/// * - Support clinical decision-making and care planning
+/// * - Maintain longitudinal health data for trend analysis
+/// * - Enable integration with supplement and medication tracking
+/// * KEY FEATURES:
+/// * - Flexible JSON-based history storage for complex medical data
+/// * - Integration with supplement and medication records
+/// * - Timestamped updates for change tracking
+/// * - Extensible notes system for additional context
+/// * DATA STRUCTURE:
+/// * - History field contains structured medical data arrays
+/// * - Supports multiple record types (diagnoses, procedures, allergies)
+/// * - Flexible schema accommodates various medical record formats
+/// * - Searchable and analyzable through JSON query capabilities
+/// * BUSINESS LOGIC:
+/// * - Medical histories inform care plan development
+/// * - Historical data supports AI event context analysis
+/// * - Integration with current supplement/medication regimens
+/// * - Updates tracked for audit and compliance purposes
+/// * SECURITY CONSIDERATIONS:
+/// * - Row Level Security (RLS) enabled for patient privacy
+/// * - HIPAA-compliant data handling and access controls
+/// * - Encrypted JSON storage for sensitive medical information
+/// * - Access restricted to authorized healthcare providers
+/// * INTEGRATIONS:
+/// * - Patient Supplements: Links medical history to current treatments
+/// * - Care Plans: Historical context for care decisions
+/// * - AI Analysis: Medical context for event interpretation
+/// * - Compliance Systems: Audit trails for regulatory requirements
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model patient_medical_histories {
+  id                     String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  history                Json                     @default("[]")
+  updated_at             DateTime                 @updatedAt @db.Timestamptz(6)
+  supplement_id          String?                  @db.Uuid
+  name                   String?                  @db.VarChar(200)
+  notes                  String?
+  patient_supplements    patient_supplements?     @relation(fields: [supplement_id], references: [id], onDelete: Cascade)
+  patient_sleep_checkins patient_sleep_checkins[]
+
+  @@index([supplement_id], map: "idx_pmr_supplement")
+  @@map("patient_medical_records")
+}
+
+/// *
+/// * PATIENT SUPPLEMENTS TABLE - Patient Profile and Medication Management
+/// * PURPOSE:
+/// * - Central patient profile management system
+/// * - Track medication and supplement regimens
+/// * - Store essential patient demographics and health metrics
+/// * - Support care coordination and monitoring workflows
+/// * KEY FEATURES:
+/// * - Comprehensive patient demographic data
+/// * - Physical health metrics (height, weight)
+/// * - Call confirmation scheduling for check-ins
+/// * - Integration with habits and medical history
+/// * - Customer relationship management
+/// * PATIENT DATA:
+/// * - Personal identifiers (name, date of birth)
+/// * - Physical measurements for health monitoring
+/// * - Contact confirmation scheduling
+/// * - Customer account linkage
+/// * BUSINESS LOGIC:
+/// * - Patient profiles support personalized care plans
+/// * - Physical metrics inform AI analysis thresholds
+/// * - Call confirmation ensures regular patient contact
+/// * - Supplement tracking supports medication compliance
+/// * - Historical data enables care trend analysis
+/// * CARE COORDINATION:
+/// * - Links to patient habits for routine monitoring
+/// * - Medical history integration for clinical context
+/// * - Customer account connection for billing and services
+/// * - Call scheduling ensures regular care team contact
+/// * SECURITY CONSIDERATIONS:
+/// * - Row Level Security (RLS) enabled for patient privacy
+/// * - HIPAA-compliant data storage and access controls
+/// * - Sensitive health information encrypted
+/// * - Access restricted to authorized care team members
+/// * INTEGRATIONS:
+/// * - Patient Habits: Daily routine and medication tracking
+/// * - Medical Histories: Comprehensive health record management
+/// * - Care Teams: Access control and care coordination
+/// * - Billing Systems: Customer account management
+/// * DATA LIFECYCLE:
+/// * - Patient profiles maintained for duration of care
+/// * - Regular updates for demographic and health changes
+/// * - Historical data preserved for longitudinal analysis
+/// * - Compliance with healthcare data retention policies
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model patient_supplements {
+  id                     String                      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                   String?
+  dob                    DateTime?                   @db.Date
+  created_at             DateTime                    @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime                    @updatedAt @db.Timestamptz(6)
+  customer_id            String?                     @db.Uuid
+  call_confirmed_until   DateTime?                   @db.Timestamptz(6)
+  height_cm              Int?
+  weight_kg              Float?
+  doctors                Json?                       @default("[]")
+  patient_habits         patient_habits[]
+  medical_histories      patient_medical_histories[]
+  patient_sleep_checkins patient_sleep_checkins[]
+  users                  users?                      @relation(fields: [customer_id], references: [user_id])
+}
+
+/// *
+/// * PAYMENTS TABLE - Financial Transaction Management
+/// * PURPOSE:
+/// * - Process and track all subscription payments
+/// * - Integrate with Vietnamese payment providers (VNPay)
+/// * - Support multiple currencies and payment methods
+/// * - Maintain complete payment audit trail
+/// * KEY FEATURES:
+/// * - Multi-provider payment processing (VNPay, Stripe, PayPal)
+/// * - Vietnamese Dong (VND) primary currency support
+/// * - Payment status lifecycle management
+/// * - Transaction reference tracking
+/// * - Delivery data for webhook processing
+/// * PAYMENT LIFECYCLE:
+/// * - PENDING: Initial payment creation
+/// * - PROCESSING: Payment provider processing
+/// * - COMPLETED: Successful payment confirmation
+/// * - FAILED: Payment processing failure
+/// * - REFUNDED: Payment reversal
+/// * - CANCELLED: User or system cancellation
+/// * VNPAY INTEGRATION:
+/// * - VNP transaction reference for tracking
+/// * - Creation and expiration timestamps
+/// * - Order information for payment context
+/// * - Version tracking for API compatibility
+/// * BUSINESS LOGIC:
+/// * - Payments trigger subscription activation/renewal
+/// * - Failed payments trigger grace period workflows
+/// * - Refunds processed through original payment method
+/// * - Payment history supports billing reconciliation
+/// * SECURITY CONSIDERATIONS:
+/// * - Row Level Security (RLS) enabled for financial data protection
+/// * - Sensitive payment data encrypted and PCI-compliant
+/// * - Transaction references prevent duplicate processing
+/// * - Audit trails for all payment state changes
+/// * INTEGRATIONS:
+/// * - Users: Payment ownership and billing relationship
+/// * - Subscription Histories: Payment event tracking
+/// * - Transactions: Detailed transaction records
+/// * - Plans: Pricing and billing period information
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model payments {
+  payment_id      String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id         String                   @db.Uuid
+  amount          BigInt
+  currency        String                   @default("VND") @db.VarChar(3)
+  provider        PaymentProvider
+  status          String                   @default("pending") @db.VarChar(20)
+  description     String?
+  delivery_data   Json?
+  vnp_txn_ref     String?                  @unique @db.VarChar(50)
+  idempotency_key String?                  @unique @db.VarChar(128)
+  vnp_create_date BigInt?
+  vnp_expire_date BigInt?
+  vnp_order_info  String?
+  version         String?                  @db.VarChar(20)
+  created_at      DateTime                 @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime                 @updatedAt @db.Timestamptz(6)
+  status_enum     payment_status_enum?
+  user            users                    @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+  histories       subscription_histories[] @relation("PaymentEvents")
+  transactions    transactions?
+
+  @@index([user_id], map: "idx_pay_user")
+  @@index([status], map: "idx_pay_status")
+  @@index([created_at], map: "idx_pay_created_at")
+}
+
+/// *
+/// * PLANS TABLE - Subscription Service Tiers Management
+/// * PURPOSE:
+/// * - Define service tiers and pricing structures
+/// * - Manage subscription plan features and quotas
+/// * - Support flexible billing periods and currencies
+/// * - Enable plan migration and upgrade workflows
+/// * KEY FEATURES:
+/// * - Hierarchical plan structure with unique codes
+/// * - Flexible pricing in multiple currencies
+/// * - Feature quota system (cameras, storage, caregivers)
+/// * - Plan lifecycle management (active/inactive)
+/// * - Version control for plan evolution
+/// * PLAN STRUCTURE:
+/// * - Unique plan codes for easy identification
+/// * - Descriptive names and detailed descriptions
+/// * - Multi-currency pricing support (VND primary)
+/// * - Billing period flexibility (monthly, yearly)
+/// * - Active status for plan availability
+/// * QUOTA SYSTEM:
+/// * - Camera quotas for device limits
+/// * - Storage allocation per plan tier
+/// * - Data retention period configuration
+/// * - Caregiver seat limits for team access
+/// * - Site/location limits for multi-site deployments
+/// * - Major update frequency controls
+/// * BUSINESS LOGIC:
+/// * - Plans define user subscription capabilities
+/// * - Quota enforcement prevents service overuse
+/// * - Plan migrations support upgrades/downgrades
+/// * - Billing periods align with payment cycles
+/// * - Feature flags enable plan customization
+/// * VERSIONING:
+/// * - is_current flag identifies active plan versions
+/// * - Legacy plans remain for existing subscribers
+/// * - Plan evolution tracked through version history
+/// * - Grandfathered pricing supported
+/// * SECURITY CONSIDERATIONS:
+/// * - Row Level Security (RLS) enabled for plan management
+/// * - Admin-only access for plan configuration
+/// * - Pricing information access controlled
+/// * - Plan change audit trails maintained
+/// * INTEGRATIONS:
+/// * - Subscriptions: Active plan assignments
+/// * - Payments: Pricing and billing integration
+/// * - Quotas: Service limit enforcement
+/// * - Features: Plan-based feature access control
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model plans {
+  id                     String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  code                   String              @unique @db.VarChar(50)
+  name                   String              @db.VarChar(255)
+  description            String?
+  price                  BigInt
+  currency               String              @default("VND") @db.VarChar(10)
+  billing_period         billing_period_enum @default(monthly)
+  is_active              Boolean             @default(true)
+  is_current             Boolean             @default(true)
+  camera_quota           Int                 @default(0)
+  storage_size           String?
+  retention_days         Int                 @default(30)
+  caregiver_seats        Int                 @default(0)
+  sites                  Int                 @default(1)
+  major_updates_months   Int                 @default(12)
+  version                String?             @db.VarChar(20)
+  effective_from         DateTime?
+  effective_to           DateTime?
+  is_recommended         Boolean?            @default(false)
+  successor_plan_code    String?             @db.VarChar(50)
+  successor_plan_version String?             @db.VarChar(20)
+  tier                   Int?                @default(1)
+  status                 plan_status_enum    @default(available)
+  created_at             DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime            @updatedAt @db.Timestamptz(6)
+  subscriptions          subscriptions[]     @relation("SubscriptionToPlan")
+  transactions           transactions[]      @relation("TransactionToPlan")
+
+  @@index([code, is_current])
+  @@index([is_active])
+}
+
+/// *
+/// * TRANSACTIONS TABLE - Billing Period and Payment Record Management
+/// * PURPOSE:
+/// * - Record detailed billing transactions for subscription periods
+/// * - Capture plan configuration snapshots at transaction time
+/// * - Support complex pricing with discounts and taxes
+/// * - Enable invoice generation and payment tracking
+/// * KEY FEATURES:
+/// * - Complete plan snapshot preservation at transaction time
+/// * - Multi-component pricing (subtotal, discount, tax, total)
+/// * - Billing period management with start/end dates
+/// * - Payment provider integration and tracking
+/// * - Transaction lifecycle with invoice-like status flow
+/// * TRANSACTION TYPES (effective_action):
+/// * - SUBSCRIPTION_CREATE: New subscription activation
+/// * - SUBSCRIPTION_RENEW: Recurring billing cycle
+/// * - SUBSCRIPTION_UPGRADE: Plan tier increase
+/// * - SUBSCRIPTION_DOWNGRADE: Plan tier reduction
+/// * - SUBSCRIPTION_CANCEL: Service termination
+/// * - REFUND: Payment reversal processing
+/// * PRICING STRUCTURE:
+/// * - Subtotal: Base plan pricing
+/// * - Discount: Applied promotions and credits
+/// * - Tax: Applicable taxes and fees
+/// * - Total: Final amount charged
+/// * - Multi-currency support (VND primary)
+/// * TRANSACTION LIFECYCLE:
+/// * - DRAFT: Initial transaction creation
+/// * - PENDING: Awaiting payment processing
+/// * - PAID: Payment confirmed and processed
+/// * - OVERDUE: Payment past due date
+/// * - CANCELLED: Transaction cancelled before payment
+/// * - REFUNDED: Payment reversed/refunded
+/// * BUSINESS LOGIC:
+/// * - Plan snapshots preserve pricing at transaction time
+/// * - Billing periods align with subscription cycles
+/// * - Failed payments trigger grace period workflows
+/// * - Transaction chains support complex billing scenarios
+/// * - Idempotency keys prevent duplicate processing
+/// * SECURITY CONSIDERATIONS:
+/// * - Row Level Security (RLS) enabled for financial data
+/// * - Plan snapshots include only necessary configuration
+/// * - Payment provider data encrypted and secure
+/// * - Complete audit trail for all financial operations
+/// * INTEGRATIONS:
+/// * - Subscriptions: Billing period management
+/// * - Plans: Current and historical plan configuration
+/// * - Payments: Payment processing and confirmation
+/// * - Invoices: Invoice generation and delivery
+model transactions {
+  tx_id                String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  subscription_id      String                   @db.Uuid
+  plan_id              String?                  @db.Uuid
+  plan_code            String
+  plan_snapshot        Json
+  amount_subtotal      BigInt
+  amount_discount      BigInt                   @default(0)
+  amount_tax           BigInt                   @default(0)
+  amount_total         BigInt
+  currency             String                   @default("VND") @db.VarChar(3)
+  period_start         DateTime                 @db.Timestamptz(6)
+  period_end           DateTime                 @db.Timestamptz(6)
+  status               invoice_status_enum      @default(draft)
+  due_date             DateTime?                @db.Timestamptz(6)
+  paid_at              DateTime?                @db.Timestamptz(6)
+  payment_id           String?                  @unique(map: "uq_tx_payment_id") @db.Uuid
+  effective_action     TransactionAction
+  provider             PaymentProvider
+  provider_payment_id  String?                  @db.VarChar(100)
+  idempotency_key      String?                  @db.VarChar(100)
+  related_tx_id        String?                  @db.Uuid
+  notes                String?
+  created_at           DateTime                 @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime                 @updatedAt @db.Timestamptz(6)
+  is_proration         Boolean                  @default(false)
+  plan_snapshot_new    Json?
+  plan_snapshot_old    Json?
+  proration_charge     BigInt                   @default(0)
+  proration_credit     BigInt                   @default(0)
+  version              String?                  @db.VarChar(20)
+  histories            subscription_histories[] @relation("TxEvents")
+  payment              payments?                @relation(fields: [payment_id], references: [payment_id])
+  plans                plans?                   @relation("TransactionToPlan", fields: [plan_id], references: [id])
+  related_tx           transactions?            @relation("RelatedTx", fields: [related_tx_id], references: [tx_id])
+  related_transactions transactions[]           @relation("RelatedTx")
+  subscriptions        subscriptions            @relation(fields: [subscription_id], references: [subscription_id], onDelete: Cascade)
+
+  @@unique([subscription_id, idempotency_key], map: "uq_tx_idem_per_sub")
+  @@index([subscription_id], map: "idx_tx_sub")
+  @@index([status], map: "idx_tx_status")
+  @@index([period_start], map: "idx_tx_period_start")
+  @@index([period_end], map: "idx_tx_period_end")
+  @@index([provider_payment_id], map: "idx_tx_provider_payment_id")
+  @@index([plan_code], map: "idx_tx_plan_code")
+  @@index([plan_id], map: "idx_tx_plan_id")
+  @@index([created_at], map: "idx_tx_created_at")
+  @@index([idempotency_key], map: "idx_tx_idempotency_key")
+  @@map("transactions")
+}
+
+/// *
+/// * MAIL TEMPLATES TABLE - Dynamic Email Template Management
+/// * PURPOSE:
+/// * - Store reusable email templates for system notifications
+/// * - Support dynamic content injection through variable substitution
+/// * - Enable consistent branding and messaging across all emails
+/// * - Facilitate A/B testing and template versioning
+/// * KEY FEATURES:
+/// * - Multi-format templates (HTML and plain text)
+/// * - Dynamic variable substitution system
+/// * - Template categorization by type and purpose
+/// * - Active/inactive status for template management
+/// * - Version control and update tracking
+/// * TEMPLATE TYPES:
+/// * - NOTIFICATION: Event alerts and system notifications
+/// * - CONFIRMATION: Email verification and confirmations
+/// * - INVITATION: Caregiver and user invitations
+/// * - BILLING: Payment and subscription communications
+/// * - SECURITY: Security alerts and password resets
+/// * - MARKETING: Promotional and informational emails
+/// * VARIABLE SYSTEM:
+/// * - JSON-based variable definitions and constraints
+/// * - Runtime variable injection for personalization
+/// * - Support for complex data structures and formatting
+/// * - Template validation ensures required variables present
+/// * BUSINESS LOGIC:
+/// * - Templates enable consistent user communication
+/// * - Variable system supports personalized messaging
+/// * - Template versioning allows gradual rollout
+/// * - Multi-language support through template variants
+/// * - Analytics integration for email performance tracking
+/// * SECURITY CONSIDERATIONS:
+/// * - Template content sanitized to prevent XSS
+/// * - Variable injection uses safe substitution methods
+/// * - Access controlled through admin permissions
+/// * - Template changes logged for audit purposes
+/// * INTEGRATIONS:
+/// * - Notification Service: Automated email generation
+/// * - User Management: Account-related communications
+/// * - Billing System: Payment and subscription emails
+/// * - Event System: Alert and confirmation emails
+/// * PERFORMANCE OPTIMIZATIONS:
+/// * - Template caching for fast rendering
+/// * - Pre-compiled templates for high-volume sends
+/// * - Batch processing for bulk email campaigns
+/// * - Template preview and testing capabilities
+model mail_templates {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name             String   @unique @db.VarChar(100)
+  type             String   @db.VarChar(50)
+  subject_template String   @db.VarChar(255)
+  html_template    String
+  text_template    String?
+  variables        Json?
+  is_active        Boolean  @default(true)
+  created_at       DateTime @default(now()) @db.Timestamptz(6)
+  updated_at       DateTime @updatedAt @db.Timestamptz(6)
+
+  @@index([type], map: "idx_email_templates_type")
+  @@index([is_active], map: "idx_email_templates_active")
+  @@map("email_templates")
+}
+
+/// *
+/// * SNAPSHOT FILES TABLE - Image File Storage Management
+/// * PURPOSE:
+/// * - Manage individual image files associated with camera snapshots
+/// * - Track both local storage paths and cloud storage URLs
+/// * - Support multiple file formats and storage backends
+/// * - Enable efficient file cleanup and storage optimization
+/// * KEY FEATURES:
+/// * - Dual storage support (local filesystem and cloud storage)
+/// * - File size tracking for storage analytics
+/// * - Automatic file cleanup with snapshot deletion
+/// * - Timestamp tracking for file lifecycle management
+/// * STORAGE ARCHITECTURE:
+/// * - Local paths for temporary or cache storage
+/// * - Cloud URLs for permanent archival and CDN delivery
+/// * - File size monitoring for quota management
+/// * - Batch operations for storage optimization
+/// * BUSINESS LOGIC:
+/// * - Files linked to parent snapshots for organization
+/// * - Storage migration from local to cloud supported
+/// * - File retention follows snapshot lifecycle policies
+/// * - Analytics data for storage cost optimization
+/// * INTEGRATIONS:
+/// * - Snapshots: Parent-child relationship for organization
+/// * - Storage Services: Cloud upload and management
+/// * - CDN: Fast image delivery and caching
+/// * - Cleanup Jobs: Automated file lifecycle management
+model snapshot_files {
+  image_id    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  snapshot_id String    @db.Uuid
+  is_primary  Boolean   @default(false)
+  image_path  String?
+  cloud_url   String?
+  created_at  DateTime  @default(now()) @db.Timestamptz(6)
+  file_size   BigInt?
+  snapshots   snapshots @relation(fields: [snapshot_id], references: [snapshot_id], onDelete: Cascade, onUpdate: NoAction, map: "fk_snapshot_images_snapshot")
+
+  @@index([created_at], map: "idx_snapshot_images_created_at")
+  @@index([snapshot_id], map: "idx_snapshot_images_snapshot_id")
+  @@map("snapshot_images")
+}
+
+/// *
+/// * SNAPSHOTS TABLE - Camera Image Capture Management
+/// * PURPOSE:
+/// * - Record all camera image captures with metadata
+/// * - Support both scheduled and on-demand image capture
+/// * - Track AI processing status and results
+/// * - Enable efficient image search and retrieval
+/// * KEY FEATURES:
+/// * - Multiple capture types (scheduled, manual, event-triggered)
+/// * - AI processing workflow tracking
+/// * - Rich metadata storage for image context
+/// * - User attribution for manual captures
+/// * - Efficient indexing for time-based queries
+/// * CAPTURE TYPES:
+/// * - SCHEDULED: Regular interval captures
+/// * - MANUAL: User-requested captures
+/// * - EVENT_TRIGGERED: AI-initiated captures
+/// * - SECURITY: Security event captures
+/// * - CALIBRATION: System calibration captures
+/// * PROCESSING WORKFLOW:
+/// * - Initial capture creates unprocessed snapshot
+/// * - AI processing analyzes image for events
+/// * - Processing completion updates status and timestamp
+/// * - Failed processing flagged for retry or manual review
+/// * BUSINESS LOGIC:
+/// * - Snapshots serve as evidence for AI-detected events
+/// * - Metadata includes camera settings and environmental context
+/// * - User-triggered captures support manual monitoring
+/// * - Processing status enables workflow management
+/// * - Retention policies automatically clean old snapshots
+/// * SECURITY CONSIDERATIONS:
+/// * - Row Level Security (RLS) enabled for user data isolation
+/// * - Image access controlled through user permissions
+/// * - Metadata may contain sensitive location information
+/// * - Processing logs maintained for audit purposes
+/// * PERFORMANCE OPTIMIZATIONS:
+/// * - Multi-column indexes for common query patterns
+/// * - User-date composite indexes for dashboard queries
+/// * - Camera-date indexes for device-specific views
+/// * - Processing status index for workflow management
+/// * INTEGRATIONS:
+/// * - Cameras: Source device for image capture
+/// * - Users: Capture attribution and access control
+/// * - Events: Visual evidence for AI detections
+/// * - Snapshot Files: Image file storage and management
+/// * - AI Processing: Event detection and analysis
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model snapshots {
+  snapshot_id  String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  camera_id    String            @db.Uuid
+  user_id      String?           @db.Uuid
+  metadata     Json?
+  capture_type capture_type_enum @default(scheduled)
+  captured_at  DateTime          @default(now()) @db.Timestamptz(6)
+  processed_at DateTime?         @db.Timestamptz(6)
+  is_processed Boolean           @default(false)
+  events       events[]
+  files        snapshot_files[]
+  cameras      cameras           @relation(fields: [camera_id], references: [camera_id], onDelete: Cascade)
+  users        users?            @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  @@index([camera_id], map: "idx_sn_camera")
+  @@index([captured_at], map: "idx_sn_captured")
+  @@index([is_processed], map: "idx_sn_processed")
+  @@index([capture_type], map: "idx_sn_type")
+  @@index([user_id], map: "idx_sn_user")
+  @@index([user_id, captured_at], map: "idx_sn_user_captured")
+  @@index([camera_id, captured_at], map: "idx_snaps_camera_date")
+}
+
+/// *
+/// * SUBSCRIPTION HISTORIES TABLE - Complete Subscription Audit Trail
+/// * PURPOSE:
+/// * - Track all subscription lifecycle events and state changes
+/// * - Maintain complete audit trail for billing and compliance
+/// * - Support subscription analytics and reporting
+/// * - Enable subscription state reconstruction and debugging
+/// * KEY FEATURES:
+/// * - Comprehensive event type tracking for all subscription changes
+/// * - Before/after state capture for plan and status changes
+/// * - User attribution for action accountability
+/// * - Transaction and payment linking for financial audit
+/// * - Rich event data storage for context preservation
+/// * SUBSCRIPTION EVENTS:
+/// * - CREATED: New subscription activation
+/// * - PLAN_CHANGED: Plan upgrade/downgrade
+/// * - STATUS_CHANGED: Status transitions (active, cancelled, etc.)
+/// * - PAYMENT_RECEIVED: Successful payment processing
+/// * - PAYMENT_FAILED: Payment processing failure
+/// * - RENEWAL: Automatic subscription renewal
+/// * - CANCELLATION: User or system cancellation
+/// * - REACTIVATION: Subscription restoration
+/// * STATE TRACKING:
+/// * - Old/new plan codes for plan change audit
+/// * - Old/new status for status transition tracking
+/// * - Transaction IDs for billing period linking
+/// * - Payment IDs for financial record correlation
+/// * BUSINESS INTELLIGENCE:
+/// * - Subscription lifecycle analytics
+/// * - Churn analysis and retention metrics
+/// * - Plan migration pattern analysis
+/// * - Payment failure trend monitoring
+/// * - Customer behavior insights
+/// * SECURITY CONSIDERATIONS:
+/// * - Complete audit trail for compliance requirements
+/// * - User attribution for accountability
+/// * - Immutable history records prevent tampering
+/// * - Access controlled through admin permissions
+/// * INTEGRATIONS:
+/// * - Subscriptions: Parent subscription relationship
+/// * - Transactions: Billing event correlation
+/// * - Payments: Financial transaction linking
+/// * - Users: Action attribution and access control
+/// * - Analytics: Data source for business intelligence
+model subscription_histories {
+  id              BigInt                       @id @default(autoincrement())
+  subscription_id String                       @db.Uuid
+  event_type      subscription_event_type_enum
+  event_data      Json?
+  old_plan_code   String?                      @db.VarChar(50)
+  new_plan_code   String?                      @db.VarChar(50)
+  old_status      subscription_status_enum?
+  new_status      subscription_status_enum?
+  triggered_by    String?                      @db.Uuid
+  reason          String?                      @db.VarChar(255)
+  tx_id           String?                      @db.Uuid
+  payment_id      String?                      @db.Uuid
+  created_at      DateTime                     @default(now()) @db.Timestamptz(6)
+  payment         payments?                    @relation("PaymentEvents", fields: [payment_id], references: [payment_id])
+  subscription    subscriptions                @relation(fields: [subscription_id], references: [subscription_id], onDelete: Cascade)
+  triggeredByUser users?                       @relation("subscription_event_triggered_by", fields: [triggered_by], references: [user_id])
+  transaction     transactions?                @relation("TxEvents", fields: [tx_id], references: [tx_id])
+
+  @@index([subscription_id], map: "idx_sub_events_sub")
+  @@index([event_type], map: "idx_sub_events_type")
+  @@index([tx_id], map: "idx_sub_events_tx")
+  @@index([payment_id], map: "idx_sub_events_payment")
+  @@index([new_plan_code], map: "idx_sub_events_new_plan")
+  @@index([old_plan_code], map: "idx_sub_events_old_plan")
+  @@index([triggered_by], map: "idx_sub_events_triggered_by")
+  @@index([subscription_id, event_type, created_at(sort: Desc)], map: "idx_sub_events_composite")
+  @@map("subscription_events")
+}
+
+/// *
+/// * SUBSCRIPTIONS TABLE - User Service Subscription Management
+/// * PURPOSE:
+/// * - Manage active user subscriptions and service entitlements
+/// * - Track billing cycles and payment schedules
+/// * - Support plan changes, upgrades, and cancellations
+/// * - Enable quota management and add-on services
+/// * KEY FEATURES:
+/// * - Complete subscription lifecycle management
+/// * - Flexible billing period support (monthly, yearly)
+/// * - Trial period and promotional pricing support
+/// * - Extra quota add-ons for premium users
+/// * - Auto-renewal and cancellation handling
+/// * SUBSCRIPTION STATUS:
+/// * - ACTIVE: Currently active and paid subscription
+/// * - TRIAL: Free trial period
+/// * - PAST_DUE: Payment overdue but service active
+/// * - CANCELLED: Cancelled but service continues until period end
+/// * - UNPAID: Payment failed, service suspended
+/// * - ENDED: Subscription fully terminated
+/// * BILLING MANAGEMENT:
+/// * - Current period tracking for prorated billing
+/// * - Auto-renewal flag for subscription continuation
+/// * - Trial period support for new user onboarding
+/// * - Cancellation at period end to prevent immediate termination
+/// * - Payment history integration for billing reconciliation
+/// * QUOTA SYSTEM:
+/// * - Base quotas from plan configuration
+/// * - Extra quotas for premium users (cameras, caregivers, sites, storage)
+/// * - Dynamic quota calculation combining base + extra
+/// * - Usage tracking and quota enforcement
+/// * BUSINESS LOGIC:
+/// * - Subscriptions define user service access
+/// * - Plan changes create new transactions
+/// * - Cancellations honor period end dates
+/// * - Trial subscriptions auto-convert to paid
+/// * - Grace periods prevent immediate service disruption
+/// * SECURITY CONSIDERATIONS:
+/// * - Row Level Security (RLS) enabled for user data isolation
+/// * - Subscription access controlled through user permissions
+/// * - Payment and billing data encrypted
+/// * - Complete audit trail through subscription histories
+/// * INTEGRATIONS:
+/// * - Users: Subscription ownership and access control
+/// * - Plans: Service tier and pricing configuration
+/// * - Transactions: Billing period and payment management
+/// * - Histories: Complete subscription audit trail
+/// * - Quotas: Service usage limits and enforcement
+model subscriptions {
+  subscription_id       String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id               String                   @db.Uuid
+  plan_code             String
+  plan_id               String?                  @db.Uuid
+  status                subscription_status_enum @default(active)
+  billing_period        billing_period_enum      @default(none)
+  started_at            DateTime                 @default(now()) @db.Timestamptz(6)
+  current_period_start  DateTime                 @default(now()) @db.Timestamptz(6)
+  current_period_end    DateTime?                @db.Timestamptz(6)
+  trial_end_at          DateTime?                @db.Timestamptz(6)
+  canceled_at           DateTime?                @db.Timestamptz(6)
+  ended_at              DateTime?                @db.Timestamptz(6)
+  auto_renew            Boolean                  @default(true)
+  extra_camera_quota    Int                      @default(0)
+  extra_caregiver_seats Int                      @default(0)
+  extra_sites           Int                      @default(0)
+  extra_storage_gb      Int                      @default(0)
+  notes                 String?
+  last_payment_at       DateTime?                @db.Timestamptz(6)
+  version               String?                  @db.VarChar(20)
+  cancel_at_period_end  Boolean                  @default(false)
+  offer_start_date      DateTime?                @db.Timestamptz(6)
+  offer_end_date        DateTime?                @db.Timestamptz(6)
+  renewal_attempt_count Int                      @default(0)
+  next_renew_attempt_at DateTime?                @db.Timestamptz(6)
+  dunning_stage         String?                  @db.VarChar(50)
+  last_renewal_error    String?
+  plan_snapshot         Json?
+  /// Cached unit amount in minor currency units (e.g., VND đồng) to simplify queries and proration.
+  unit_amount_minor     BigInt                   @default(0)
+  histories             subscription_histories[]
+  plans                 plans?                   @relation("SubscriptionToPlan", fields: [plan_id], references: [id])
+  users                 users                    @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+  transactions          transactions[]
+
+  @@index([current_period_end], map: "idx_sub_current_end")
+  @@index([plan_code], map: "idx_sub_plan")
+  @@index([plan_id], map: "idx_sub_plan_id")
+  @@index([status], map: "idx_sub_status")
+  @@index([user_id], map: "idx_sub_user")
+  @@index([user_id, status], map: "idx_sub_user_status")
+  @@index([user_id, status, current_period_end], map: "idx_sub_user_status_end")
+}
+
+/// *
+/// * SYSTEM SETTINGS TABLE - Global Configuration Management
+/// * PURPOSE:
+/// * - Store system-wide configuration settings and parameters
+/// * - Enable dynamic configuration without code deployment
+/// * - Support different data types and categories of settings
+/// * - Provide secure storage for sensitive configuration data
+/// * KEY FEATURES:
+/// * - Categorized settings for organized management
+/// * - Multiple data type support (string, number, boolean, JSON)
+/// * - Encrypted storage for sensitive configuration values
+/// * - Change tracking with user attribution
+/// * - Description fields for setting documentation
+/// * SETTING CATEGORIES:
+/// * - GENERAL: Basic system configuration
+/// * - SECURITY: Authentication and authorization settings
+/// * - NOTIFICATION: Email and push notification configuration
+/// * - AI: AI model parameters and thresholds
+/// * - BILLING: Payment and subscription settings
+/// * - INTEGRATION: Third-party service configuration
+/// * DATA TYPES:
+/// * - STRING: Text-based configuration values
+/// * - NUMBER: Numeric parameters and thresholds
+/// * - BOOLEAN: Feature flags and on/off settings
+/// * - JSON: Complex configuration objects
+/// * BUSINESS LOGIC:
+/// * - Settings cached for performance optimization
+/// * - Changes logged for audit and rollback capability
+/// * - Encrypted settings secured with system keys
+/// * - Admin-only access for configuration management
+/// * - Runtime configuration updates without restart
+/// * SECURITY CONSIDERATIONS:
+/// * - Row Level Security (RLS) enabled for admin access only
+/// * - Sensitive settings encrypted at rest
+/// * - Change attribution for accountability
+/// * - Access controlled through admin permissions
+/// * INTEGRATIONS:
+/// * - Users: Change attribution and access control
+/// * - System Services: Runtime configuration consumption
+/// * - Admin Interface: Configuration management UI
+/// * - Audit Logs: Change tracking and compliance
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model system_config {
+  setting_id    String         @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  setting_key   String         @unique(map: "idx_system_config_key") @db.VarChar(100)
+  setting_value String
+  description   String?
+  data_type     data_type_enum @default(string)
+  category      String?        @default("general") @db.VarChar(50)
+  is_encrypted  Boolean?       @default(false)
+  updated_at    DateTime       @updatedAt @db.Timestamptz(6)
+  updated_by    String         @db.Uuid
+  users         users          @relation(fields: [updated_by], references: [user_id])
+
+  @@index([category], map: "idx_ss_category")
+  @@index([data_type], map: "idx_ss_dtype")
+  @@index([setting_key], map: "idx_ss_key")
+  @@index([updated_by], map: "idx_ss_updated_by")
+  @@map("system_config")
+}
+
+/// *
+/// * USERS TABLE - Central User Account Management
+/// * PURPOSE:
+/// * - Core user authentication and profile management
+/// * - Support multiple user roles and access levels
+/// * - Enable secure authentication with OTP verification
+/// * - Maintain comprehensive user activity tracking
+/// * KEY FEATURES:
+/// * - Role-based access control system
+/// * - Secure password hashing and storage
+/// * - Two-factor authentication with OTP support
+/// * - Account activation and deactivation management
+/// * - Complete user profile information storage
+/// * USER ROLES:
+/// * - CUSTOMER: Primary account holders with full access
+/// * - CAREGIVER: Care team members with event management access
+/// * - ADMIN: System administrators with full platform access
+/// * - SUPPORT: Customer support team with limited admin access
+/// * - VIEWER: Read-only access for family members
+/// * AUTHENTICATION:
+/// * - Username/email and password-based login
+/// * - Secure password hashing with bcrypt
+/// * - OTP-based two-factor authentication
+/// * - Account lockout and recovery mechanisms
+/// * - Session management and token validation
+/// * PROFILE MANAGEMENT:
+/// * - Complete user demographic information
+/// * - Contact information for notifications
+/// * - Account preferences and settings
+/// * - Activity status and account lifecycle
+/// * BUSINESS LOGIC:
+/// * - Users can have multiple camera systems
+/// * - Caregiver roles enable care team collaboration
+/// * - Account deactivation preserves data integrity
+/// * - Profile updates trigger notification preferences
+/// * - Role changes require admin approval
+/// * SECURITY CONSIDERATIONS:
+/// * - Row Level Security (RLS) enabled for user data isolation
+/// * - Password hashes use industry-standard algorithms
+/// * - OTP codes expire automatically for security
+/// * - Account access logged for audit purposes
+/// * - Personal data encrypted and GDPR-compliant
+/// * PERFORMANCE OPTIMIZATIONS:
+/// * - Unique indexes on email and username for fast lookups
+/// * - Role-based indexes for access control queries
+/// * - Activity status indexes for user management
+/// * - Expression indexes for complex queries
+/// * INTEGRATIONS:
+/// * - All system tables reference users for ownership/attribution
+/// * - Authentication services for login/logout
+/// * - Notification systems for user communication
+/// * - Activity logging for audit trails
+/// * - Subscription management for service access
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model users {
+  user_id                       String                   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  username                      String                   @unique @db.VarChar(50)
+  email                         String                   @unique @db.VarChar(100)
+  password_hash                 String                   @db.VarChar(255)
+  full_name                     String                   @db.VarChar(100)
+  role                          role_enum                @default(customer)
+  date_of_birth                 DateTime?                @db.Date
+  phone_number                  String?                  @db.VarChar(20)
+  is_active                     Boolean                  @default(true)
+  created_at                    DateTime                 @default(now()) @db.Timestamptz(6)
+  updated_at                    DateTime                 @updatedAt @db.Timestamptz(6)
+  otp_code                      String?
+  otp_expires_at                DateTime?                @db.Timestamptz(6)
+  default_payment_method_id     String?                  @db.Uuid
+  access_grants_caregiver       access_grants[]          @relation("access_grants_caregiver_idTousers")
+  access_grants_customer        access_grants[]          @relation("access_grants_customer_idTousers")
+  activity_logs                 activity_logs[]
+  cameras                       cameras[]
+  caregiver_invitations         caregiver_invitations[]
+  emergency_contacts            emergency_contacts[]
+  events_user                   events[]                 @relation("events_user_idTousers")
+  events_verified_by            events[]                 @relation("events_verified_byTousers")
+  event_history                 event_history[]
+  device_tokens                 device_tokens[]
+  notifications_acknowledger    notifications[]          @relation("notifications_acknowledger")
+  notifications_user            notifications[]          @relation("notifications_user")
+  patient_habits                patient_habits[]         @relation("UserPatientHabits")
+  patient_sleep_checkins        patient_sleep_checkins[]
+  patient_supplements           patient_supplements[]
+  payments                      payments[]
+  snapshots                     snapshots[]
+  subscription_events_triggered subscription_histories[] @relation("subscription_event_triggered_by")
+  subscriptions                 subscriptions[]
+  system_config                 system_config[]
+  support_tickets               support_tickets[]
+  credential_images             credential_images[]
+  user_preferences              user_preferences[]
+
+  @@index([created_at], map: "idx_users_created_at")
+  @@index([email], map: "idx_users_email")
+  @@index([default_payment_method_id], map: "idx_users_default_payment_method")
+  @@index([is_active], map: "idx_users_is_active")
+  @@index([role], map: "idx_users_role")
+  @@index([username], map: "idx_users_username")
+  @@index([phone_number], map: "idx_users_phone_number")
+}
+
+model access_grants {
+  id                   String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  customer_id          String   @db.Uuid
+  caregiver_id         String   @db.Uuid
+  stream_view          Boolean  @default(false)
+  alert_read           Boolean  @default(false)
+  alert_ack            Boolean  @default(false)
+  profile_view         Boolean  @default(false)
+  log_access_days      Int?     @default(0)
+  report_access_days   Int?     @default(0)
+  notification_channel Json?    @default("[]")
+  permission_requests  Json?    @default("[]")
+  permission_scopes    Json?    @default("{}")
+  created_at           DateTime @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime @updatedAt @db.Timestamptz(6)
+  caregiver            users    @relation("access_grants_caregiver_idTousers", fields: [caregiver_id], references: [user_id], onDelete: NoAction, onUpdate: NoAction)
+  customer             users    @relation("access_grants_customer_idTousers", fields: [customer_id], references: [user_id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([customer_id, caregiver_id], map: "idx_unique_shared_permission_pair")
+  @@index([caregiver_id], map: "idx_shared_permissions_caregiver")
+  @@map("access_grants")
+}
+
+model support_tickets {
+  ticket_id      String                       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id        String                       @db.Uuid
+  type           customer_request_type_enum
+  title          String?
+  description    String?
+  created_at     DateTime                     @default(now()) @db.Timestamptz(6)
+  updated_at     DateTime                     @updatedAt @db.Timestamptz(6)
+  status         customer_request_status_enum @default(new)
+  category       String?                      @default("general") @db.VarChar(50)
+  priority       String?                      @default("medium") @db.VarChar(20)
+  assigned_to    String?                      @db.Uuid
+  tags           Json?
+  metadata       Json?
+  due_date       DateTime?                    @db.Timestamptz(6)
+  resolved_at    DateTime?                    @db.Timestamptz(6)
+  closed_at      DateTime?                    @db.Timestamptz(6)
+  users          users                        @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+  ticket_history ticket_history[]
+
+  @@index([created_at], map: "idx_customer_requests_created_at")
+  @@index([type], map: "idx_customer_requests_type")
+  @@index([status], map: "idx_customer_requests_status")
+  @@index([user_id], map: "idx_customer_requests_user")
+  @@index([category], map: "idx_support_tickets_category")
+  @@index([priority], map: "idx_support_tickets_priority")
+  @@index([assigned_to], map: "idx_support_tickets_assigned_to")
+  @@map("ticket")
+}
+
+model ticket_history {
+  history_id      String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ticket_id       String          @db.Uuid
+  user_id         String          @db.Uuid
+  action          String          @db.VarChar(30)
+  old_values      Json?
+  new_values      Json?
+  description     String?
+  metadata        Json?
+  created_at      DateTime        @default(now()) @db.Timestamptz(6)
+  support_tickets support_tickets @relation(fields: [ticket_id], references: [ticket_id], onDelete: Cascade)
+
+  @@index([ticket_id, created_at], map: "idx_ticket_history_ticket_id_created_at")
+  @@map("ticket_history")
+}
+
+model user_preferences {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id       String    @db.Uuid
+  category      String
+  setting_key   String    @db.VarChar(100)
+  setting_value String
+  is_enabled    Boolean   @default(true)
+  is_overridden Boolean   @default(false)
+  overridden_at DateTime? @db.Timestamptz(6)
+  users         users     @relation(fields: [user_id], references: [user_id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, category, setting_key], map: "uq_user_preference")
+  @@map("user_preferences")
+}
+
+model credential_images {
+  upload_id   String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id     String           @db.Uuid
+  filename    String           @db.VarChar(255)
+  mime        String           @db.VarChar(100)
+  size        Int
+  url         String           @db.VarChar(500)
+  upload_type upload_type_enum @default(other)
+  created_at  DateTime         @default(now()) @db.Timestamptz(6)
+  metadata    Json?
+  users       users            @relation(fields: [user_id], references: [user_id], onDelete: Cascade)
+
+  @@index([user_id], map: "idx_uploads_user")
+  @@index([created_at], map: "idx_uploads_created")
+  @@map("uploads")
+}
+
+model permissions {
+  name        String   @unique @db.VarChar(100)
+  description String?  @db.VarChar(255)
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime @updatedAt @db.Timestamptz(6)
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @map("permission_id") @db.Uuid
+
+  @@index([name], map: "idx_permissions_name")
+}
+
+model roles {
+  name        String   @unique @db.VarChar(50)
+  description String?  @db.VarChar(255)
+  created_at  DateTime @default(now()) @db.Timestamptz(6)
+  updated_at  DateTime @updatedAt @db.Timestamptz(6)
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @map("role_id") @db.Uuid
+
+  @@index([name], map: "idx_roles_name")
+}
+
+model role_permissions {
+  role_id       String   @db.Uuid
+  permission_id String   @db.Uuid
+  assigned_at   DateTime @default(now()) @db.Timestamptz(6)
+
+  @@id([role_id, permission_id])
+  @@index([permission_id], map: "idx_role_permissions_permission")
+  @@index([role_id], map: "idx_role_permissions_role")
+}
+
+model user_roles {
+  user_id     String   @db.Uuid
+  role_id     String   @db.Uuid
+  assigned_at DateTime @default(now()) @db.Timestamptz(6)
+
+  @@id([user_id, role_id])
+  @@index([role_id], map: "idx_user_roles_role")
+  @@index([user_id], map: "idx_user_roles_user")
+  @@map("user_roles")
+}
+
+enum caregiver_invitation_status_enum {
+  pending
+  accepted
+  rejected
+  cancelled
+  expired
+}
+
+enum confirmation_state_enum {
+  DETECTED
+  CAREGIVER_UPDATED
+  CONFIRMED_BY_CUSTOMER
+  REJECTED_BY_CUSTOMER
+}
+
+enum event_lifecycle_enum {
+  CANCELED
+  NOTIFIED
+  AUTOCALLED
+  ALARM_ACTIVATED
+  ACKNOWLEDGED
+  EMERGENCY_RESPONSE_RECEIVED
+  RESOLVED
+  EMERGENCY_ESCALATION_FAILED
+}
+
+enum event_history_action_enum {
+  proposed
+  edited
+  confirmed
+  rejected
+  cancelled
+  auto_rejected
+  caregiver_invited
+  caregiver_assigned
+  abandoned
+  escalated
+  handled
+}
+
+enum TransactionAction {
+  new
+  renew
+  upgrade
+  downgrade
+  adjustment
+}
+
+enum PaymentProvider {
+  vn_pay
+  stripe
+  manual
+}
+
+enum activity_severity_enum {
+  critical
+  high
+  medium
+  low
+  info
+}
+
+enum billing_period_enum {
+  monthly
+  yearly
+  none
+  semiannual
+}
+
+enum camera_status_enum {
+  active
+  inactive
+  error
+}
+
+enum camera_type_enum {
+  ip
+  usb
+  rtsp
+}
+
+enum capture_type_enum {
+  scheduled
+  motion_triggered
+  manual
+  alert_triggered
+}
+
+enum customer_request_status_enum {
+  new
+  acknowledged
+  in_progress
+  resolved
+  rejected
+}
+
+enum customer_request_type_enum {
+  report
+  support
+}
+
+enum data_type_enum {
+  string
+  int
+  float
+  boolean
+  json
+}
+
+enum event_status_enum {
+  danger
+  warning
+  normal
+  unknowns
+  suspect
+}
+
+enum event_verification_status_enum {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELED
+  ESCALATED
+  HANDLED
+}
+
+enum event_type_enum {
+  fall
+  abnormal_behavior
+  emergency
+  normal_activity
+  sleep
+  manual_emergency
+}
+
+enum frequency_enum {
+  daily
+  weekly
+  custom
+}
+
+enum gender_enum {
+  male
+  female
+  other
+}
+
+enum habit_type_enum {
+  sleep
+  meal
+  medication
+  activity
+  bathroom
+  therapy
+  social
+}
+
+enum notif_status_enum {
+  pending
+  sent
+  delivered
+  failed
+  bounced
+}
+
+enum channel_enum {
+  email
+  sms
+  push
+  in_app
+  webhook
+}
+
+enum notif_type_enum {
+  email
+  sms
+  push
+  in_app
+  webhook
+}
+
+enum notification_type_enum {
+  event_alert
+  confirmation_request
+  caregiver_invitation
+  system_update
+  emergency_alert
+  subscription_renewal
+  quota_warning
+}
+
+enum overall_status_enum {
+  good
+  concerning
+  critical
+}
+
+enum push_platform_enum {
+  ios
+  android
+  web
+}
+
+enum role_enum {
+  customer
+  caregiver
+  admin
+}
+
+enum room_status_enum {
+  available
+  occupied
+  maintenance
+  closed
+}
+
+enum room_type_enum {
+  single
+  double
+  ward
+  icu
+  emergency
+  common
+}
+
+enum severity_enum {
+  critical
+  high
+  medium
+  low
+}
+
+enum subscription_event_type_enum {
+  created
+  activated
+  renewed
+  upgraded
+  downgraded
+  paused
+  resumed
+  canceled
+  refunded
+  expired
+  reminder
+}
+
+enum subscription_status_enum {
+  trialing
+  active
+  past_due
+  paused
+  suspended
+  canceled
+  expired
+}
+
+enum activity_action_enum {
+  create
+  update
+  delete
+  login
+  logout
+  acknowledge
+  assign
+  unassign
+}
+
+enum plan_status_enum {
+  draft
+  available
+  deprecated
+  archived
+}
+
+enum invoice_status_enum {
+  draft
+  open
+  paid
+  void
+  overdue
+}
+
+enum payment_status_enum {
+  pending
+  processing
+  completed
+  failed
+  cancelled
+}
+
+enum upload_type_enum {
+  camera_error
+  other
+}
+
+enum suggestion_scope_enum {
+  item
+  type
+  all
+}
+
+model suggestions {
+  suggestion_id String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id       String?                @db.Uuid
+  title         String?                @db.VarChar(255)
+  status        suggestion_status_enum @default(ACTIVE)
+  resource_type String?                @db.VarChar(100) // optional: what resource this suggestion is for (e.g., event, snapshot)
+  resource_id   String?                @db.VarChar(100) // optional: id of the resource (item-level)
+  type          String?                @db.VarChar(50) // e.g., fallRisk, deviceCheck
+  message       String?
+  meta          Json?
+
+  // Skip / Snooze columns
+  skip_until  DateTime?              @db.Timestamptz(6)
+  skip_scope  suggestion_scope_enum?
+  skip_type   String?                @db.VarChar(50)
+  skip_reason String?
+
+  last_notified_at DateTime? @db.Timestamptz(6)
+  next_notify_at   DateTime? @db.Timestamptz(6)
+
+  created_at DateTime  @default(now()) @db.Timestamptz(6)
+  updated_at DateTime? @updatedAt @db.Timestamptz(6)
+
+  @@index([skip_until], map: "idx_suggestions_skip_until")
+  @@index([next_notify_at], map: "idx_suggestions_next_notify_at")
+  @@index([type], map: "idx_suggestions_type")
+  @@index([user_id], map: "idx_suggestions_user_id")
+  @@map("suggestions")
+}
+
+enum suggestion_status_enum {
+  ACTIVE
+  HIDDEN
+  RESOLVED
+}

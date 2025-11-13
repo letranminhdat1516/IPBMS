@@ -1,0 +1,53 @@
+{
+  "$schema": "https://unpkg.com/knip@5/schema.json",
+  "entry": ["{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!", "src/{index,cli,main}.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!"],
+  "project": ["**/*.{js,mjs,cjs,jsx,ts,tsx,mts,cts}!"],
+  "paths": {},
+  "ignore": [
+    "src/application/dto/**",
+    "src/application/services/**",
+    "src/core/entities/**",
+    "src/infrastructure/cron/**",
+    "src/modules/**",
+    "src/shared/**",
+    "src/swagger/**",
+    "tools/**",
+    "scripts/**",
+    "docs/**",
+    "test/**",
+    "dist/**",
+    "prisma/seed/**",
+    "**/__mocks__/**"
+  ],
+  "ignoreFiles": ["**/*.spec.*", "**/*.test.*", "dist/**", "prisma/seed/**"],
+  "ignoreBinaries": ["quality"],
+  "ignoreDependencies": [
+    "@supabase/supabase-js",
+    "@vonage/server-sdk",
+    "html-entities",
+    "multer",
+    "multer-storage-cloudinary",
+    "nestjs-vnpay",
+    "swagger-ui-express",
+    "@commitlint/cli",
+    "@commitlint/config-conventional",
+    "@jest/globals",
+    "@nestjs/cli",
+    "@types/html-entities",
+    "@types/moment-timezone",
+    "@types/multer",
+    "@types/supertest",
+    "@types/uuid",
+    "lint-staged",
+    "socket.io-client",
+    "supertest",
+    "ts-node-dev",
+    "ts-node",
+    "typescript"
+  ],
+  "ignoreIssues": {
+    "src/presentation/controllers/**/index.ts": ["exports"],
+    "src/presentation/controllers/**": ["exports"],
+    "dist/**": ["files", "exports", "unresolved"]
+  }
+}

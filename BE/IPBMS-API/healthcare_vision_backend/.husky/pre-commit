@@ -1,0 +1,62 @@
+#!/usr/bin/env sh
+
+# Lightweight, faster pre-commit hook using lint-staged and optional full checks.
+# - Set SKIP_HOOKS=1 to skip the hook entirely (useful for CI or special cases)
+# - Set FULL_PRECOMMIT=1 to run the full test + build pipeline (slow)
+
+set -e
+
+echo "🔍 Running pre-commit checks..."
+
+if [ "${SKIP_HOOKS}" = "1" ] || [ "${SKIP_HOOKS}" = "true" ]; then
+    echo "⚠️  SKIP_HOOKS set — skipping pre-commit checks."
+    exit 0
+fi
+
+# Prefer lint-staged if available (runs ESLint + Prettier only on staged files)
+echo "🔧 Running lint-staged (ESLint + Prettier) on staged files..."
+if pnpm -v >/dev/null 2>&1 && command -v npx >/dev/null 2>&1; then
+    # Use pnpm lint-staged if configured; fallback to npx lint-staged if needed
+    if pnpm -s lint-staged; then
+        echo "✅ lint-staged passed."
+    else
+        echo "❌ lint-staged failed. Run 'pnpm lint:fix' and 'pnpm format' to attempt fixes."
+        exit 1
+    fi
+else
+    echo "⚠️  pnpm or npx not available — running full lint/format checks as fallback."
+    if ! pnpm -s lint:quiet; then
+        echo "❌ ESLint found errors. Run 'pnpm lint:fix' to auto-fix issues."
+        exit 1
+    fi
+    if ! pnpm -s format:check; then
+        echo "❌ Code formatting issues found. Run 'pnpm format' to fix."
+        exit 1
+    fi
+fi
+
+# Always run a fast TypeScript check to catch obvious type errors
+echo "🔎 Running TypeScript type check..."
+if ! pnpm -s type-check; then
+    echo "❌ TypeScript type errors found. Please fix them before committing."
+    exit 1
+fi
+
+# Optionally run full tests + build if FULL_PRECOMMIT is set (useful for release branches)
+if [ "${FULL_PRECOMMIT}" = "1" ] || [ "${FULL_PRECOMMIT}" = "true" ]; then
+    echo "🧪 FULL_PRECOMMIT enabled — running full tests and build (this may take a while)..."
+    if ! pnpm -s test --silent; then
+        echo "❌ Tests failed. Please fix them before committing."
+        exit 1
+    fi
+
+    echo "🔨 Running build..."
+    if ! pnpm -s build; then
+        echo "❌ Build failed. Please fix build errors before committing."
+        exit 1
+    fi
+else
+    echo "ℹ️  Skipping full test/build. Set FULL_PRECOMMIT=true to enable."
+fi
+
+echo "✅ All pre-commit checks passed. Ready to commit."

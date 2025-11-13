@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  app:
+    image: minhnhat166/healthcare_visionai_be:latest
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
+    container_name: healthcare_vision_ai
+    ports:
+      - '5090:3010'
+
+    environment:
+      NODE_ENV: 'production'
+      NODE_OPTIONS: '-r module-alias/register --dns-result-order=ipv4first'
+      PORT: '3010'
+      APP_TZ: 'Asia/Ho_Chi_Minh'
+      TZ: 'Asia/Ho_Chi_Minh'
+    restart: unless-stopped
