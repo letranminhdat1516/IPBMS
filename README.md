@@ -1,34 +1,39 @@
-
-
 # 🌐 Healthcare Vision AI — Unified Patient Monitoring Platform
 
-### AI-powered real-time fall detection, seizure monitoring, caregiver workflow, and medical data management.
+### AI-powered real-time fall detection, seizure monitoring, caregiver workflow, blockchain-backed verification, and medical data integrity.
 
 Healthcare Vision AI is an end-to-end intelligent healthcare monitoring platform consisting of:
 
 * **VisionEdge AI (Python)** – Camera streaming, frame extraction, on-device AI inference
 * **Healthcare Backend (NestJS)** – Event pipeline, user management, subscription & billing
 * **Admin Dashboard (React + ShadcnUI)** – Operational dashboard, provider & system management
-* **Caregiver Mobile App (Flutter)** – Real-time patient alerts, medical info, caregiver workflow
+* **Caregiver Mobile App (Flutter)** – Real-time patient alerts, medical info, workflow
+* **Polkadot Verification Layer (Blockchain)** – On-chain integrity proofs for medical snapshots
 
-This README provides a **high-level system overview** across all components.
+This README provides a **high-level system overview** for AI, healthcare, and blockchain competition submission.
 
 ---
 
 # 🧭 System Overview
 
-The Healthcare Vision AI ecosystem enables hospitals, clinics, home-care agencies, and caregivers to detect abnormal patient behaviors—such as falls, seizures, prolonged inactivity, or leaving the bed—in real time.
+The Healthcare Vision AI ecosystem enables hospitals, clinics, home-care agencies, caregivers, and patient families to detect abnormal behaviors such as:
 
-The system is built with:
+* Falls
+* Seizures
+* Prolonged inactivity
+* Leaving the bed
+* Unsafe movement patterns
 
-* **AI Computer Vision** (YOLO Pose / MediaPipe)
-* **Realtime Event Streaming**
-* **Multi-channel alerting**
-* **Caregiver-first workflows**
-* **Enterprise-grade security**
-* **Flexible healthcare subscription plans**
+The system integrates:
 
-It supports large-scale deployment from single-room homecare to hospital-level operations.
+* **Computer Vision AI (YOLOv8-Pose, VSViG, MediaPipe)**
+* **Edge computing**
+* **Realtime event streaming**
+* **Multi-channel notifications**
+* **Healthcare workflows**
+* **Blockchain integrity verification (Polkadot Parachain)**
+
+Deployable from single-room homecare to full-scale hospitals.
 
 ---
 
@@ -40,6 +45,8 @@ It supports large-scale deployment from single-room homecare to hospital-level o
             │  • RTSP Streaming                             │
             │  • Frame Extraction                           │
             │  • Fall & Seizure Detection (YOLO/Pose)       │
+            │  • Snapshot Hashing                           │
+            │  • Polkadot On-chain Verification             │
             │  • Snapshot Uploading                         │
             └──────────────┬────────────────────────────────┘
                            |
@@ -47,157 +54,196 @@ It supports large-scale deployment from single-room homecare to hospital-level o
 ┌────────────────────────────────────────────────────────────────────────┐
 │                   Healthcare Backend (NestJS + PostgreSQL)             │
 │  • User / Role / Permission Management                                 │
-│  • Camera & Room Management                                             │
-│  • Event Pipelines (Fall/Seizure/Alerts)                                │
-│  • Realtime WebSocket + Supabase Option                                 │
-│  • Subscription & Payment (VNPay)                                       │
-│  • Audit Logs / System Health / Monitoring                              │
+│  • Camera & Room Management                                            │
+│  • Event Pipelines (Fall/Seizure/Alerts)                               │
+│  • Realtime WebSocket + Supabase Option                                │
+│  • Subscription & Payment (VNPay)                                      │
+│  • Polkadot Proof Metadata Storage                                     │
+│  • Audit Logs / System Health / Monitoring                             │
 └───────────────────────┬─────────────────────────────────────────────────┘
                         |
-          ┌─────────────┼──────────────────────┐
-          v             v                      v
+          ┌─────────────┼───────────────────────┐
+          v             v                       v
 ┌────────────────┐ ┌──────────────────┐ ┌───────────────────────────────┐
 │ Admin Dashboard│ │ Caregiver Mobile │ │ Customer Mobile (future)      │
 │ React + Shadcn │ │ Flutter App      │ │ Patient / Family Monitoring   │
-│ • Analytics    │ │ • Realtime Alerts│ │ • Delayed Alerts (30s rule)   │
-│ • Providers    │ │ • Assignments    │ │ • Medical Records             │
-│ • Billing      │ │ • Medical Info   │ │ • Subscriptions               │
+│ • Analytics    │ │ • Realtime Alerts│ │ • Verified Alerts             │
+│ • Providers    │ │ • Assignments    │ │ • Event History               │
+│ • Billing      │ │ • Medical Info   │ │ • Subscription Portal         │
 └────────────────┘ └──────────────────┘ └───────────────────────────────┘
 ```
 
 ---
 
-# 🧠 Core Capabilities
+# 🔗 NEW: Polkadot Verification Layer (Blockchain Integrity Module)
 
-## 1️⃣ VisionEdge AI (Python – On-device Inference)
+To enhance trust, compliance, and real-world reliability, the system integrates a **Polkadot Parachain–based verification module** ensuring all AI-detected events are:
 
-* RTSP camera streaming (IMOU, IP camera…)
-* Keyframe extraction
-* YOLOv8-Pose: fall detection & posture analysis
-* VSViG / MediaPipe seizure detection (optional)
-* Snapshot uploading to backend
-* Runs on Orange Pi / Jetson / PC
+✔ **Tamper-proof**
+✔ **Cryptographically verified**
+✔ **Immutable and auditable**
+✔ **Cross-chain interoperable**
 
-## 2️⃣ Backend API (NestJS)
+Only **image hashes** (SHA-256) are stored on-chain, protecting patient privacy while ensuring medical integrity.
 
-* Modular architecture with clean layer separation
-* Event ingestion & alert classification
-* User roles: Admin, Doctor, Nurse, Caregiver, Customer
-* Medical assignment system
-* Camera & room management
-* AI event logs & snapshot history
-* Subscription plans (free/standard/premium)
-* VNPay payment + proration
-* System health monitoring, retries, caching, rate limiting
+### What is stored on-chain?
 
-## 3️⃣ Admin Dashboard (React + ShadcnUI)
+```solidity
+struct ImageProof {
+    address uploader;
+    bytes32 imageHash;
+    string eventType;
+    string cameraId;
+    string eventId;
+    uint256 timestamp;
+}
+```
 
-* Full medical operations dashboard
-* Patient & caregiver management
-* Vision AI camera status and diagnostic tools
-* Real-time system health widget
-* Activity logs & compliance tracking
-* Billing & subscription management
-* Enhanced error boundaries + exponential backoff retry
-* Network-aware UI (detect offline/online)
+Snapshots remain **securely stored off-chain**, while the blockchain acts as a **proof-of-integrity ledger**.
 
-## 4️⃣ Caregiver Mobile App (Flutter)
+### Why Polkadot?
 
-* Real-time alerts with sound + critical popup
-* Intelligent 30-second delayed customer alert pipeline
-* Patient medical information
-* Assignments (daily tasks & shift workflows)
-* Multi-channel notifications: push, SMS, email, call
-* Configurable image retention & alert settings
-* Supabase Realtime + REST fallback
-* Service-layer business logic: SLA, escalation, validity checks
+* Inherits relay-chain security
+* Multi-parachain interoperability
+* Low fees → scalable for high-frequency AI events
+* Ideal for healthcare compliance (HIPAA, ISO, medical forensics)
 
 ---
 
-# 📁 Monorepo Directory Structure (Recommended)
+# 🧩 Expanded: Edge Layer (VisionEdge AI + Polkadot Integration)
+
+The Edge Layer performs:
+
+* RTSP camera ingest
+* AI inference for fall/seizure detection
+* Keyframe extraction
+* Snapshot capture (JPEG)
+* SHA-256 hashing
+* On-chain verification via Polkadot smart contract
+* Upload snapshot + metadata to backend
+
+### Edge-to-Blockchain Flow
+
+```
+Camera Frame → AI Detection → Keyframe Extracted
+        ↓
+Generate sha256 hash of image
+        ↓
+Send transaction to Polkadot Parachain
+        ↓
+storeImageProof(hash, metadata)
+        ↓
+Return txHash to backend
+        ↓
+Dashboard + Mobile show “Verified on Polkadot”
+```
+
+Edge devices supported:
+
+* Orange Pi 5 Plus
+* Nvidia Jetson
+* Mini PC / Server
+
+---
+
+# 🧠 Core Capabilities
+
+## 1️⃣ VisionEdge AI
+
+* RTSP ingest (IMOU, HikVision…)
+* Keyframe extraction
+* Fall detection (YOLOv8-Pose)
+* Seizure detection (VSViG / MediaPipe)
+* Blockchain verification module (Polkadot)
+* Snapshot uploader
+
+## 2️⃣ Backend API (NestJS)
+
+Same as before — added:
+
+* Polkadot proof syncing
+* txHash storage for snapshots
+* Verify endpoint for dashboards
+
+## 3️⃣ Admin Dashboard (React + ShadcnUI)
+
+Now includes:
+
+* “Verified on Polkadot” event label
+* Event integrity checking
+* Audit-forensics panel
+
+## 4️⃣ Caregiver Mobile App (Flutter)
+
+Extended:
+
+* Verified alert badge
+* Blockchain-proof details
+* Event authenticity confirmation
+
+---
+
+# 📁 Monorepo Structure
 
 ```
 healthcare-vision-ai/
-├── edge/                   # VisionEdge AI (Python)
-├── backend/                # NestJS API
+├── edge/                   # VisionEdge AI (Python) + Polkadot module
+├── backend/                # NestJS API + Proof Service
 ├── admin-dashboard/        # React + ShadcnUI dashboard
 └── caregiver-app/          # Flutter mobile app
 ```
 
 ---
 
-# 🔐 Security & Compliance
+# 🔐 Security & Compliance (Extended)
 
-* Role-based access control (RBAC)
-* 21 permission seeds for fine-grained healthcare access
-* JWT authentication with refresh lifecycle
-* Audit logs (user activities, system anomalies)
-* Health checks for cameras, services & workers
-* Encrypted storage for medical snapshots
-* Compliant patient data handling design
+* RBAC with 21 permissions
+* Encrypted medical storage
+* On-chain proof for incident integrity
+* Audit logs for hospital compliance
+* Blockchain-backed event forensic traceability
 
 ---
 
-# 🚨 Alert Processing Pipeline
+# 🚨 Alert Processing Pipeline (Updated with Blockchain)
 
-### Caregiver path
+### Caregiver Path
 
-1. VisionEdge detects abnormal event
-2. Backend stores event + snapshot
-3. Realtime push to caregiver mobile app
-4. Caregiver can **acknowledge / cancel / escalate**
+1. VisionEdge detects event
+2. Snapshot hashed
+3. Hash stored on Polkadot parachain
+4. Backend receives txHash and metadata
+5. Caregiver receives **verified alert**
+6. Caregiver can **acknowledge / cancel / escalate**
 
-### Customer path (patient family)
+### Customer Path
 
-* Alerts delayed **30 seconds**
-* If caregiver cancels → customer alert suppressed
-* Reduces false positives in homecare setting
-
----
-
-# 📊 Admin Dashboard Features
-
-* Medical dashboard with real-time stats
-* Patient list, medical history, caregiver assignments
-* Vision camera list + stream health
-* Error boundaries + retry logic
-* System uptime, service endpoints health monitor
-* Subscription & billing
-* Full Vietnamese localization
-
----
-
-# 📱 Mobile App Features
-
-* Realtime alerts
-* Popup + alarm sound
-* Medical info & habits
-* Assignments system
-* Multi-channel notifications
-* Supabase Realtime listener
-* REST fallback for offline-first reliability
+* Alerts delayed 30 seconds
+* If caregiver cancels → customer alert is suppressed
+* Verified proof shown only when finalized
 
 ---
 
 # 🧰 Tech Stack Summary
 
-| Layer     | Technology                                                  |
-| --------- | ----------------------------------------------------------- |
-| Edge AI   | Python, YOLOv8-Pose, OpenCV, MediaPipe                      |
-| Backend   | NestJS 11, Prisma, PostgreSQL, Redis, WebSocket             |
-| Dashboard | React 18, TypeScript, ShadcnUI, TanStack Query/Router       |
-| Mobile    | Flutter 3, Supabase Realtime, Provider/Service architecture |
-| DevOps    | Docker, CI/CD, Supabase optional, S3/Cloudinary             |
+| Layer      | Technology                                                      |
+| ---------- | --------------------------------------------------------------- |
+| Blockchain | Polkadot Parachain, Solidity (Moonbeam/Astar), substrate-api-js |
+| Edge AI    | Python, YOLOv8-Pose, OpenCV, MediaPipe                          |
+| Backend    | NestJS 11, Prisma, PostgreSQL, Redis                            |
+| Dashboard  | React 18, ShadcnUI, TanStack Query                              |
+| Mobile     | Flutter 3, Supabase Realtime                                    |
+| DevOps     | Docker, CI/CD, Cloudflare/Supabase                              |
 
 ---
 
 # 🚀 Development Quick Start
 
-## Clone monorepo
-
 ```bash
-git clone [https://github.com/letranminhdat1516/IPBMS](https://github.com/letranminhdat1516/IPBMS)
+git clone https://github.com/letranminhdat1516/IPBMS
 ```
+
+(maintained as-is)
 
 ---
 
