@@ -196,8 +196,7 @@ healthcare-vision-ai/
 ## Clone monorepo
 
 ```bash
-git clone https://github.com/vision-ai-capstone/healthcare-vision-ai.git
-cd healthcare-vision-ai
+git clone [https://github.com/letranminhdat1516/IPBMS](https://github.com/letranminhdat1516/IPBMS)
 ```
 
 ---
