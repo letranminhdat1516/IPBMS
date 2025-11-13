@@ -1,0 +1,41 @@
+[build]
+  # Use npm in Netlify CI for maximum compatibility. If you prefer bun,
+  # see the README or Netlify UI and add custom install steps.
+  # Use bun for install & build. If bun isn't present on the Netlify image,
+  # install it at build time, add it to PATH, then install deps and build.
+  # This will generate/consume bun.lockb for reproducible installs.
+  command = "bash -lc 'if ! command -v bun >/dev/null 2>&1; then echo \"Installing bun...\"; curl -fsSL https://bun.sh/install | bash -s -- --yes; fi; export BUN_INSTALL=\"$HOME/.bun\"; export PATH=\"$BUN_INSTALL/bin:$PATH\"; bun -v; bun install --no-save || bun install; bun run build'"
+  publish   = "dist"
+  functions = "netlify/functions"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[redirects]]
+  from = "/users"
+  to = "/.netlify/functions/users"
+  status = 200
+
+# Security and caching headers
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+[[headers]]
+  for = "/favicon.ico"
+  [headers.values]
+    Cache-Control = "public, max-age=3600"
+
+# If you need to use bun in CI, replace build.command with a bun-install step
+# or configure a custom build image that includes bun. Example (not enabled):
+# command = "curl -fsSL https://bun.sh/install | bash -s -- --yes && export BUN_INSTALL=\"$HOME/.bun\" && export PATH=\"$BUN_INSTALL/bin:$PATH\" && bun install && bun run build"

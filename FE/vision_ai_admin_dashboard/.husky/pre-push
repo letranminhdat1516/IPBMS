@@ -1,0 +1,9 @@
+if ! bun run lint --fix; then
+  echo '❌ Lint failed. Commit aborted.'
+  exit 1
+fi
+
+if ! bun run format:check --write; then
+  echo '❌ Format check failed. Commit aborted.'
+  exit 1
+fi
