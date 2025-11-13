@@ -1,0 +1,34 @@
+{
+	"name": "image-verify",
+	"description": "Image verification service using Cloudflare Workers and Polkadot",
+	"author": "qal",
+	"private": true,
+	"cloudflare": {
+		"label": "Image Verify",
+		"products": [
+			"Workers"
+		],
+		"categories": [
+			"image",
+			"storage",
+			"polkadot"
+		],
+		"publish": true
+	},
+	"scripts": {
+		"cf-typegen": "wrangler types",
+		"deploy": "wrangler deploy",
+		"dev": "wrangler dev",
+		"test": "wrangler deploy --dry-run && npx vitest run --config tests/vitest.config.mts"
+	},
+	"dependencies": {
+		"ethers": "^6.9.0",
+		"hono": "^4.10.5",
+		"zod": "3.25.67"
+	},
+	"devDependencies": {
+		"@types/node": "24.0.4",
+		"typescript": "5.8.3",
+		"wrangler": "^4.48.0"
+	}
+}

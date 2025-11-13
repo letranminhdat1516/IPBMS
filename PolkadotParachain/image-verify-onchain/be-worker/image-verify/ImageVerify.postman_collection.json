@@ -1,0 +1,82 @@
+{
+	"info": {
+		"_postman_id": "79db5514-5b71-4ac9-8708-a030ac0cba2c",
+		"name": "ImageVerify",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "19143572"
+	},
+	"item": [
+		{
+			"name": "Register",
+			"request": {
+				"method": "POST",
+				"header": [],
+				"body": {
+					"mode": "raw",
+					"raw": "{\r\n    \"hash\": \"6db4a9abfc4fb017fdf70ef99dd2abea1c05d3a9caf6483dbb5e9497092e73ab\",\r\n    \"creator\": \"qal\"\r\n}",
+					"options": {
+						"raw": {
+							"language": "json"
+						}
+					}
+				},
+				"url": {
+					"raw": "{{baseURL}}/register",
+					"host": [
+						"{{baseURL}}"
+					],
+					"path": [
+						"register"
+					]
+				}
+			},
+			"response": []
+		},
+		{
+			"name": "Verify",
+			"request": {
+				"method": "GET",
+				"header": [],
+				"url": {
+					"raw": "{{baseURL}}/verify/5a32cca5c4806129513b172763d42990f79d344d661b3e33d77d530d49d89876",
+					"host": [
+						"{{baseURL}}"
+					],
+					"path": [
+						"verify",
+						"5a32cca5c4806129513b172763d42990f79d344d661b3e33d77d530d49d89876"
+					]
+				}
+			},
+			"response": []
+		}
+	],
+	"event": [
+		{
+			"listen": "prerequest",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"exec": [
+					""
+				]
+			}
+		},
+		{
+			"listen": "test",
+			"script": {
+				"type": "text/javascript",
+				"packages": {},
+				"exec": [
+					""
+				]
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "baseURL",
+			"value": "https://image-verify.qal.vn"
+		}
+	]
+}
