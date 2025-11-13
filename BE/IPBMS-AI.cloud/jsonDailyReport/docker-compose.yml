@@ -1,0 +1,26 @@
+version: '3.9'
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: ddd_api
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: ${DATABASE_URL}
+      DIRECT_URL: ${DIRECT_URL}
+      LM_API_BASE: ${LM_API_BASE}
+      LM_API_KEY: ${LM_API_KEY}
+      LM_MODEL: ${LM_MODEL}
+      DB_LOGGING: 'true'
+      TRUST_PROXY: 'true'
+      TEST: 'true'
+    ports:
+      - '3000:3000'
+    command: >
+      sh -c "
+      pnpm prisma migrate deploy || pnpm prisma db push;
+      node dist/main.js
+      "
