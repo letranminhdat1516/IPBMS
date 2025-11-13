@@ -1,153 +1,184 @@
-# Detect Care – Hệ thống giám sát bệnh nhân bằng AI
-
-> Ứng dụng Flutter giúp caregiver và nhân viên y tế theo dõi bệnh nhân theo thời gian thực, nhận cảnh báo khi phát hiện hành vi bất thường và quản lý gói dịch vụ.
-
-## Mục lục
-
-1. [Tổng quan](#tổng-quan)
-2. [Điểm nổi bật](#điểm-nổi-bật)
-3. [Kiến trúc & Luồng dữ liệu](#kiến-trúc--luồng-dữ-liệu)
-4. [Cấu trúc mã nguồn](#cấu-trúc-mã-nguồn)
-5. [Yêu cầu hệ thống](#yêu-cầu-hệ-thống)
-6. [Bắt đầu nhanh](#bắt-đầu-nhanh)
-7. [Lệnh hữu ích](#lệnh-hữu-ích)
-8. [Cấu hình & Môi trường](#cấu-hình--môi-trường)
-9. [Networking & ApiClient](#networking--apiclient)
-10. [Subscription & Payment](#subscription--payment)
-11. [Triển khai & vận hành](#triển-khai--vận-hành)
-12. [Đóng góp](#đóng-góp)
-13. [Tài liệu & liên hệ](#tài-liệu--liên-hệ)
+Below is the **professional English translation** of your entire README, rewritten fluently and clearly while preserving the structure and technical meaning.
+I refined certain phrases to make it more natural in English for GitHub-style documentation.
 
 ---
 
-## Tổng quan
+# Detect Care – AI-Powered Patient Monitoring System
 
-Detect Care kết hợp computer vision và AI để phát hiện:
+> A Flutter application that enables caregivers and medical staff to monitor patients in real time, receive immediate alerts for abnormal behaviors, and manage service subscriptions.
 
-- Ngã, co giật, bất động kéo dài.
-- Bệnh nhân rời giường, rơi khỏi tầm giám sát.
-- Hoạt động bất thường tại khu vực chăm sóc đặc biệt.
+## Table of Contents
 
-Các cảnh báo được gửi về ứng dụng di động, dashboard web, FCM, webhook hoặc email để caregiver phản ứng kịp thời. README này tập trung vào hướng dẫn developer: cài đặt, kiến trúc, chuẩn giao tiếp API và các điểm mở rộng chính.
+1. [Overview](#overview)
+2. [Key Features](#key-features)
+3. [Architecture & Data Flow](#architecture--data-flow)
+4. [Source Code Structure](#source-code-structure)
+5. [System Requirements](#system-requirements)
+6. [Quick Start](#quick-start)
+7. [Useful Commands](#useful-commands)
+8. [Configuration & Environment](#configuration--environment)
+9. [Networking & ApiClient](#networking--apiclient)
+10. [Subscription & Payment](#subscription--payment)
+11. [Deployment & Operations](#deployment--operations)
+12. [Contributing](#contributing)
+13. [Documentation & Contact](#documentation--contact)
 
-## Điểm nổi bật
+---
 
-- **AI real-time**: mô hình YOLO/Pose xác định sự kiện ngay trong vài trăm ms.
-- **Đa kênh cảnh báo**: FCM push, webhook, email, SMS dự phòng.
-- **Quản lý quyền chặt chẽ**: role doctor/nurse/admin/caregiver với quota camera.
-- **Subscription linh hoạt**: nhiều gói dịch vụ, hỗ trợ nâng cấp/hạ cấp, proration.
-- **Ứng dụng đa nền tảng**: Flutter (iOS/Android/Web/MacOS) + dashboard tùy chọn.
+## Overview
 
-## Kiến trúc & Luồng dữ liệu
+Detect Care combines computer vision and AI to detect:
 
-1. **VisionCore (Ingest)**
+* Falls, seizures, and prolonged inactivity.
+* Patients leaving the bed or disappearing from the camera’s field of view.
+* Irregular activities in critical care environments.
 
-   - Nhận stream RTSP/HTTP, snapshot theo chu kỳ.
-   - Đưa frame vào hàng đợi (Kafka/Redis/AMQP).
+Alerts are delivered to the mobile app, web dashboard, FCM push notifications, webhooks, or email to ensure caregivers can respond immediately.
+This README focuses on guiding developers through setup, architecture, API communication standards, and common extension points.
 
-2. **VisionAI (Analyze)**
+---
 
-   - Worker chạy mô hình YOLO/Pose, trả về bbox, keypoints, confidence.
-   - Áp dụng business rules (thời gian bất động, vùng nguy hiểm...).
+## Key Features
+
+* **Real-time AI detection**: YOLO/Pose-based model processes frames in a few hundred milliseconds.
+* **Multi-channel alerting**: FCM push, webhook, email, and optional SMS fallback.
+* **Strict role management**: doctor/nurse/admin/caregiver roles with camera quota control.
+* **Flexible subscription system**: multiple service packages with upgrade/downgrade support and proration.
+* **Cross-platform application**: Flutter (iOS/Android/Web/MacOS) + optional web dashboard.
+
+---
+
+## Architecture & Data Flow
+
+1. **VisionCore (Ingest Layer)**
+
+   * Receives RTSP/HTTP streams, takes periodic snapshots.
+   * Sends frames into a queue (Kafka/Redis/AMQP).
+
+2. **VisionAI (Analysis Layer)**
+
+   * Worker nodes run YOLO/Pose models and return bbox, keypoints, and confidence.
+   * Applies business rules (inactivity duration, danger zones, restricted areas, etc.).
 
 3. **Backend API**
 
-   - REST/WebSocket lưu trữ event, phát cảnh báo, quản lý user, subscription.
-   - Tích hợp thanh toán, webhook, thông báo hệ thống.
+   * REST/WebSocket pipeline for event storage, alerting, user management, and subscription logic.
+   * Integrates payment, webhook processing, and system notifications.
 
-4. **Ứng dụng khách**
+4. **Client Applications**
 
-   - Flutter app cho caregiver/doctor.
-   - Dashboard web (Next.js) cho admin/operations.
+   * Flutter app for caregivers and doctors.
+   * Next.js dashboard for admin/operations.
 
-5. **Lưu trữ**
-   - Media: S3/Cloudinary/NAS.
-   - Metadata: PostgreSQL hoặc MongoDB.
-   - Quan trắc: Prometheus + Grafana, log forwarding về Elastic/Sentry.
+5. **Storage**
 
-## Cấu trúc mã nguồn
+   * Media storage: S3/Cloudinary/NAS.
+   * Metadata: PostgreSQL or MongoDB.
+   * Observability stack: Prometheus + Grafana, centralized logs (Elastic/Sentry).
+
+---
+
+## Source Code Structure
 
 ```
 detect_care_app/
 ├── lib/
-│   ├── core/              # cấu hình, logger, networking, theme
-│   ├── features/          # mô-đun chức năng (alerts, subscription, media,…)
-│   ├── widgets/           # widget chia sẻ giữa màn hình
-│   └── services/          # lớp dịch vụ hỗ trợ (notification, sms, …)
-├── assets/                # icon, ảnh, lottie...
-├── docs/, openapi/        # tài liệu API, đặc tả endpoint
+│   ├── core/              # configuration, logger, networking, theme
+│   ├── features/          # feature modules (alerts, subscription, media, ...)
+│   ├── widgets/           # shared widgets across screens
+│   └── services/          # supporting services (notifications, SMS, ...)
+├── assets/                # icons, images, lottie animations
+├── docs/, openapi/        # API documentation, OpenAPI specs
 ├── android/, ios/, web/, macos/, linux/, windows/
 └── tools/, test/, coverage/
 ```
 
-Xem thêm từng mô-đun tại `lib/features/<module>`; ví dụ `lib/features/subscription` chứa API, provider, controller, mixin logic cho subscription.
+Each module lives under `lib/features/<module>`; for example,
+`lib/features/subscription` contains APIs, providers, controllers, and mixins for subscription logic.
 
-## Yêu cầu hệ thống
+---
 
-- [Flutter](https://flutter.dev) >= 3.19 và Dart tương ứng.
-- Android Studio hoặc Xcode nếu build native.
-- FVM (khuyến nghị) để cố định version Flutter.
-- CLI khác:
-  - `melos` (nếu chạy workspace script tùy chọn).
-  - `firebase-tools` khi cần deploy notifications.
-- Thiết bị thử nghiệm:
-  - iOS 13+, Android 8+, Chrome (web).
+## System Requirements
 
-Chạy `flutter doctor` để xác nhận môi trường trước khi phát triển.
+* [Flutter](https://flutter.dev) ≥ 3.19 with corresponding Dart SDK.
+* Android Studio or Xcode for native builds.
+* FVM (recommended) to lock Flutter versions.
+* Additional CLI tools:
 
-## Bắt đầu nhanh
+  * `melos` (optional for workspace scripting)
+  * `firebase-tools` (if using Firebase notifications/deployment)
+* Test devices:
+
+  * iOS 13+, Android 8+, Chrome (web)
+
+Run `flutter doctor` to validate your environment.
+
+---
+
+## Quick Start
 
 ```bash
-# 1. Clone dự án
+# 1. Clone repository
 git clone <repo-url>
 cd detect_care_app
 
-# 2. Cài dependency
+# 2. Install dependencies
 flutter pub get
 
-# 3. Cấu hình file môi trường (xem thêm phần Cấu hình)
-cp .env.dev .env.local   # hoặc tạo thủ công
+# 3. Configure environment variables (see section below)
+cp .env.dev .env.local   # or create manually
 
-# 4. Chạy ứng dụng
+# 4. Run application
 flutter run
 
-# 5. Chạy test
+# 5. Run tests
 flutter test
 ```
 
-> **Lưu ý:** dự án sử dụng nhiều native plugin. Nếu build thất bại, kiểm tra log Gradle/Xcode hoặc chạy lại `pod install` trong thư mục `ios`.
+> **Note:** The project uses multiple native plugins. If the build fails, check Gradle/Xcode logs or run `pod install` inside the `ios` directory.
 
-## Lệnh hữu ích
+---
 
-| Tác vụ                 | Lệnh mẫu                                       |
+## Useful Commands
+
+| Task                   | Command                                        |
 | ---------------------- | ---------------------------------------------- |
-| Kiểm tra format & lint | `flutter analyze`                              |
-| Chạy toàn bộ test      | `flutter test`                                 |
-| Chạy test file đơn     | `flutter test test/<file>.dart`                |
-| Theo dõi log AppLogger | Sử dụng DevTools logging / `flutter run -v`    |
-| Build release Android  | `flutter build apk --release`                  |
-| Build ipa (CI)         | `flutter build ipa --export-options-plist ...` |
+| Format & lint          | `flutter analyze`                              |
+| Run all tests          | `flutter test`                                 |
+| Run a specific test    | `flutter test test/<file>.dart`                |
+| Watch AppLogger output | DevTools logging / `flutter run -v`            |
+| Build Android release  | `flutter build apk --release`                  |
+| Build IPA (CI)         | `flutter build ipa --export-options-plist ...` |
 
-## Cấu hình & Môi trường
+---
 
-- **AppConfig** (`lib/core/config/app_config.dart`) đọc biến môi trường cho: `apiBaseUrl`, `wsBaseUrl`, `paymentConfig`, v.v.
-- File `.env.dev` chứa ví dụ; tạo `.env.local` hoặc dùng Flutter flavors để tách `dev/staging/prod`.
-- Các khóa quan trọng:
-  - `API_BASE_URL`
-  - `PAYMENT_BASE_URL`
-  - `SENTRY_DSN`, `FIREBASE_*`
-  - `SUPABASE_URL`, `SUPABASE_KEY` (nếu bật module tương ứng)
-- Khi build CI/CD, inject biến môi trường thông qua `--dart-define` hoặc `flutter_dotenv`.
+## Configuration & Environment
+
+* **AppConfig** (`lib/core/config/app_config.dart`) reads environment variables for:
+  `apiBaseUrl`, `wsBaseUrl`, `paymentConfig`, and more.
+* `.env.dev` contains examples. Create `.env.local` or use Flutter flavors for `dev/staging/prod`.
+* Important environment keys:
+
+  * `API_BASE_URL`
+  * `PAYMENT_BASE_URL`
+  * `SENTRY_DSN`, `FIREBASE_*`
+  * `SUPABASE_URL`, `SUPABASE_KEY` (if modules are enabled)
+
+For CI/CD builds, inject variables via `--dart-define` or `flutter_dotenv`.
+
+---
 
 ## Networking & ApiClient
 
-Toàn bộ request nội bộ đều đi qua `ApiClient` (`lib/core/network/api_client.dart`):
+All internal requests are routed through `ApiClient` (`lib/core/network/api_client.dart`):
 
-- Thêm header Authorization (Bearer) tự động nhờ `AuthStorage.getAccessToken`.
-- Chuẩn hoá response envelope (`{success, data, message}`) và throw exception với nội dung dễ debug.
-- Có thể mock bằng `ApiProvider` trong unit/integration test.
+* Automatically attaches Authorization header (Bearer) using `AuthStorage.getAccessToken`.
+* Standardized response envelope:
+  `{ success, data, message }`
+  and throws structured exceptions for easier debugging.
+* Supports mocking with `ApiProvider` in unit/integration tests.
 
-Ví dụ:
+Example:
 
 ```dart
 class ServicePackageApi {
@@ -163,55 +194,73 @@ class ServicePackageApi {
 }
 ```
 
-**Gợi ý:** Giữ `package:http` cho dịch vụ bên thứ ba; với backend nội bộ luôn thông qua `ApiClient` để đồng nhất logging, retry, error handling.
-
-## Subscription & Payment
-
-- Logic nằm tại `lib/features/subscription/`:
-  - `data/`: adapter API (`ServicePackageApi`, `PaymentEndpointAdapter`).
-  - `controllers/`: `SubscriptionController` cung cấp API cao cấp cho UI.
-  - `mixins/`: `SubscriptionLogic` gom logic fetch plan, chọn gói, guard payment.
-  - `screens/`: `select_subscription_screen.dart`, `payment/` nắm UI chính.
-- Các bước chính:
-  1. `SubscriptionLogic` tải danh sách gói + subscription hiện tại và xác định gói đang dùng (match theo ID/code/price/name).
-  2. Khi nâng cấp, UI gọi `upgradeSubscription` → server chuẩn bị giao dịch.  
-     Nếu response yêu cầu thanh toán hoặc có `transactionId/payment_url`, app điều hướng đến `PaymentScreen`.
-  3. Đăng ký gói miễn phí gọi thẳng `registerFreePlan`.
-- Logger (`AppLogger.api`) sử dụng tiếng Việt để align với vận hành trong nước; khi debug nên bật filter `Subscription`/`Payment`.
-
-## Triển khai & vận hành
-
-- **Đóng gói**: backend + worker trong Docker, deploy Kubernetes / ECS.  
-  Ứng dụng Flutter phát hành qua TestFlight, Firebase App Distribution, hoặc cửa hàng chính thức.
-- **Giám sát**:
-  - Metrics: Prometheus + Grafana.
-  - Lỗi: Sentry, Firebase Crashlytics.
-  - Alerting: PagerDuty/Slack webhook từ backend.
-- **Mức độ AI đề xuất**:
-  1. Motion detection cơ bản (level 1).
-  2. Pose estimation (YOLOv8-Pose) cho phát hiện ngã (level 2).
-  3. Context-aware (kết hợp lịch dùng thuốc/hồ sơ bệnh án để giảm false-positive) – level 3.
-
-## Đóng góp
-
-1. Tạo branch từ `dev`: `feature/<tên>` hoặc `fix/<tên>`.
-2. Giữ commit nhỏ, mô tả rõ.  
-   Chạy `flutter format`, `flutter analyze`, `flutter test` trước khi push.
-3. Mở Pull Request:
-   - Mô tả vấn đề, cách giải quyết, ảnh chụp (nếu UI).
-   - Viết unit test cho logic quan trọng.
-   - Cập nhật README/CHANGELOG khi thay đổi đáng kể.
-
-## Tài liệu & liên hệ
-
-- Tài liệu API: thư mục `docs/` & `openapi/`.
-- Endpoint phổ biến:
-  - `GET /api/cameras`
-  - `GET /api/events`
-  - `POST /api/uploads`
-  - `POST /api/assignments`
-- Liên hệ: `vision-ai-capstone` team — [devteam@example.com](mailto:devteam@example.com)
+**Tip:** Use `package:http` only for third-party services; all internal backend calls should go through `ApiClient` for unified logging, retry, and error handling.
 
 ---
 
-Nếu cần thêm phần hướng dẫn cụ thể (ví dụ thiết lập Firebase, cấu hình CI/CD, hay tích hợp module AI mới), hãy tạo issue hoặc cập nhật README theo template trên.
+## Subscription & Payment
+
+* Logic is located under `lib/features/subscription/`:
+
+  * `data/`: API adapters (`ServicePackageApi`, `PaymentEndpointAdapter`)
+  * `controllers/`: high-level `SubscriptionController` for UI
+  * `mixins/`: `SubscriptionLogic` for fetching plans, selecting packages, payment guards
+  * `screens/`: main UI including `select_subscription_screen.dart` and `payment/`
+
+### Flow:
+
+1. `SubscriptionLogic` loads available plans and determines the active one based on ID/code/price/name.
+2. When upgrading, UI calls `upgradeSubscription` → backend prepares the transaction.
+   If a `transactionId/payment_url` is returned, app redirects to `PaymentScreen`.
+3. Free plans call `registerFreePlan` directly.
+
+`AppLogger.api` uses Vietnamese messages to align with local operations; you may filter logs by `Subscription`/`Payment`.
+
+---
+
+## Deployment & Operations
+
+* **Packaging**: backend + workers run in Docker, deployed via Kubernetes or ECS.
+  Flutter apps are released via TestFlight, Firebase App Distribution, or official stores.
+
+* **Monitoring & Observability**:
+
+  * Metrics: Prometheus + Grafana
+  * Errors: Sentry, Firebase Crashlytics
+  * Alerting: PagerDuty/Slack webhooks from backend
+
+* **AI Capability Levels**:
+
+  1. Basic motion detection
+  2. Pose estimation (YOLOv8-Pose) for fall detection
+  3. Context-aware detection (patient history, medication schedule, etc.) to reduce false positives
+
+---
+
+## Contributing
+
+1. Create a branch from `dev`: `feature/<name>` or `fix/<name>`.
+2. Keep commits small and descriptive.
+   Run `flutter format`, `flutter analyze`, and `flutter test` before pushing.
+3. Open a Pull Request:
+
+   * Describe the issue, solution, and attach screenshots for UI changes.
+   * Add unit tests for critical logic.
+   * Update README/CHANGELOG for major updates.
+
+---
+
+## Documentation & Contact
+
+* API documentation: located in `docs/` & `openapi/`.
+* Common endpoints:
+
+  * `GET /api/cameras`
+  * `GET /api/events`
+  * `POST /api/uploads`
+  * `POST /api/assignments`
+
+Contact the **Vision AI Capstone Team**:
+📧 **[datltmse@gmail.com](mailto:datltmse@gmail.com)**
+
+
