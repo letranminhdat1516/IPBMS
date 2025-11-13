@@ -1,0 +1,1093 @@
+openapi: 3.0.3
+info:
+  title: Detect Care - API Skeleton
+  version: 0.1.0
+  description: |
+    Minimal OpenAPI skeleton for backend endpoints referenced / required by the Detect Care mobile client.
+    This file contains high + medium priority endpoints to help backend implementation and integration testing.
+servers:
+  - url: https://api.example.com
+    description: Development server (replace with staging/dev server)
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+      required:
+        - error
+    EscalationRequest:
+      type: object
+      properties:
+        deviceId:
+          type: string
+        eventId:
+          type: string
+        level:
+          type: string
+          enum: [low, medium, high]
+        message:
+          type: string
+        contacts:
+          type: array
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+                enum: [phone, email]
+              value:
+                type: string
+    EscalationResponse:
+      type: object
+      properties:
+        status:
+          type: string
+        escalationId:
+          type: string
+    AvatarUploadResponse:
+      type: object
+      properties:
+        avatarUrl:
+          type: string
+    PaymentCreateRequest:
+      type: object
+      properties:
+        planCode:
+          type: string
+        userId:
+          type: string
+        returnUrl:
+          type: string
+    PaymentCreateResponse:
+      type: object
+      properties:
+        paymentId:
+          type: string
+        checkoutUrl:
+          type: string
+    PaymentStatusResponse:
+      type: object
+      properties:
+        status:
+          type: string
+          enum: [pending, paid, failed]
+        amount:
+          type: number
+    DeviceRegisterRequest:
+      type: object
+      properties:
+        serial:
+          type: string
+        model:
+          type: string
+        meta:
+          type: object
+    DeviceRegisterResponse:
+      type: object
+      properties:
+        deviceId:
+          type: string
+        status:
+          type: string
+    DeviceVerifyRequest:
+      type: object
+      properties:
+        otp:
+          type: string
+    ThumbnailResponse:
+      type: object
+      properties:
+        url:
+          type: string
+        expiresAt:
+          type: string
+    # Plans, Payments & Subscription Schemas
+    Plan:
+      type: object
+      properties:
+        id:
+          type: string
+          description: Unique plan identifier
+        code:
+          type: string
+          description: Plan code (e.g., "basic", "premium")
+          example: 'premium'
+        name:
+          type: string
+          description: Display name of the plan
+          example: 'Premium Plan'
+        description:
+          type: string
+          description: Detailed description of the plan
+        price:
+          type: number
+          format: float
+          description: Monthly price in VND
+          example: 299000
+        currency:
+          type: string
+          default: 'VND'
+          example: 'VND'
+        camera_quota:
+          type: integer
+          description: Maximum number of cameras allowed
+          example: 5
+        retention_days:
+          type: integer
+          description: Data retention period in days
+          example: 30
+        caregiver_seats:
+          type: integer
+          description: Number of caregiver seats included
+          example: 3
+        sites:
+          type: integer
+          description: Number of sites allowed
+          example: 2
+        storage_size:
+          type: string
+          description: Storage size limit
+          example: '50GB'
+        major_updates_months:
+          type: integer
+          description: Major update period in months
+          example: 24
+        tier:
+          type: integer
+          description: Plan tier level (1=basic, 2=premium, 3=enterprise)
+          example: 2
+        is_recommended:
+          type: boolean
+          description: Whether this plan is recommended
+          default: false
+        status:
+          type: string
+          enum: [available, discontinued, coming_soon]
+          default: available
+        effective_from:
+          type: string
+          format: date-time
+          description: When this plan becomes effective
+        effective_to:
+          type: string
+          format: date-time
+          description: When this plan expires (null for ongoing)
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - code
+        - name
+        - price
+        - camera_quota
+        - retention_days
+        - caregiver_seats
+        - sites
+        - storage_size
+        - tier
+        - status
+        - effective_from
+    Transaction:
+      type: object
+      properties:
+        transactionId:
+          type: string
+          description: Unique transaction identifier
+          example: 'txn_123456789'
+        status:
+          type: string
+          enum: [pending, processing, completed, failed, cancelled]
+          description: Transaction status
+          example: 'pending'
+        amount:
+          type: number
+          format: float
+          description: Transaction amount
+          example: 299000
+        currency:
+          type: string
+          default: 'VND'
+          example: 'VND'
+        planCode:
+          type: string
+          description: Associated plan code
+          example: 'premium'
+        action:
+          type: string
+          enum: [upgrade, downgrade, purchase, renewal]
+          description: Transaction action type
+          example: 'upgrade'
+        description:
+          type: string
+          description: Transaction description
+          example: 'Upgrade to Premium Plan'
+        paymentUrl:
+          type: string
+          description: VNPay payment gateway URL
+          example: 'https://sandbox.vnpayment.vn/...'
+        expiresAt:
+          type: string
+          format: date-time
+          description: Transaction expiration time
+        idempotencyKey:
+          type: string
+          description: UUID v4 for idempotent operations
+          example: '550e8400-e29b-41d4-a716-446655440000'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - transactionId
+        - status
+        - amount
+        - currency
+        - planCode
+        - action
+        - idempotencyKey
+    Subscription:
+      type: object
+      properties:
+        subscription_id:
+          type: string
+          description: Unique subscription identifier
+          example: 'sub_123456789'
+        user_id:
+          type: string
+          description: Associated user ID
+          example: 'user_123'
+        status:
+          type: string
+          enum: [active, inactive, cancelled, suspended, expired]
+          description: Subscription status
+          example: 'active'
+        plan_code:
+          type: string
+          description: Current plan code
+          example: 'premium'
+        billing_period:
+          type: string
+          enum: [monthly, yearly]
+          description: Billing cycle
+          example: 'monthly'
+        current_period_start:
+          type: string
+          format: date-time
+          description: Start of current billing period
+        current_period_end:
+          type: string
+          format: date-time
+          description: End of current billing period
+        auto_renew:
+          type: boolean
+          description: Whether subscription auto-renews
+          default: true
+        started_at:
+          type: string
+          format: date-time
+          description: When subscription started
+        ended_at:
+          type: string
+          format: date-time
+          description: When subscription ended (null if active)
+        cancelled_at:
+          type: string
+          format: date-time
+          description: When subscription was cancelled
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+        - subscription_id
+        - user_id
+        - status
+        - plan_code
+        - billing_period
+        - current_period_start
+        - current_period_end
+        - auto_renew
+        - started_at
+    CurrentPlanResponse:
+      type: object
+      properties:
+        plan:
+          $ref: '#/components/schemas/Plan'
+        subscription:
+          $ref: '#/components/schemas/Subscription'
+        quota:
+          type: object
+          properties:
+            cameras:
+              type: integer
+              example: 5
+            caregivers:
+              type: integer
+              example: 3
+            sites:
+              type: integer
+              example: 2
+            storageGB:
+              type: integer
+              example: 50
+            retentionDays:
+              type: integer
+              example: 30
+        usage:
+          type: object
+          properties:
+            cameras_used:
+              type: integer
+              example: 3
+            caregivers_used:
+              type: integer
+              example: 2
+            sites_used:
+              type: integer
+              example: 1
+            storage_used_gb:
+              type: number
+              format: float
+              example: 25.5
+      required:
+        - plan
+        - subscription
+        - quota
+        - usage
+    TransactionRequest:
+      type: object
+      properties:
+        planCode:
+          type: string
+          description: Target plan code
+          example: 'premium'
+        action:
+          type: string
+          enum: [upgrade, downgrade, purchase, renewal]
+          description: Transaction action
+          example: 'upgrade'
+        amountTotal:
+          type: number
+          format: float
+          description: Total amount to charge
+          example: 299000
+        currency:
+          type: string
+          default: 'VND'
+          example: 'VND'
+        description:
+          type: string
+          description: Transaction description
+          example: 'Upgrade to Premium Plan'
+        idempotencyKey:
+          type: string
+          description: UUID v4 for idempotency
+          example: '550e8400-e29b-41d4-a716-446655440000'
+      required:
+        - planCode
+        - action
+        - amountTotal
+        - currency
+        - description
+        - idempotencyKey
+    TransactionResponse:
+      type: object
+      properties:
+        transactionId:
+          type: string
+          example: 'txn_123456789'
+        status:
+          type: string
+          enum: [pending, processing, completed, failed, cancelled]
+          example: 'pending'
+        amount:
+          type: number
+          format: float
+          example: 299000
+        currency:
+          type: string
+          example: 'VND'
+        paymentUrl:
+          type: string
+          description: VNPay checkout URL
+          example: 'https://sandbox.vnpayment.vn/...'
+        expiresAt:
+          type: string
+          format: date-time
+      required:
+        - transactionId
+        - status
+        - amount
+        - currency
+        - paymentUrl
+        - expiresAt
+    SubscriptionUpgradeRequest:
+      type: object
+      properties:
+        target_plan_code:
+          type: string
+          description: Target plan to upgrade to
+          example: 'premium'
+        proration_amount:
+          type: number
+          format: float
+          description: Calculated proration amount (optional)
+          example: 150000
+        effective_immediately:
+          type: boolean
+          description: Apply upgrade immediately
+          default: true
+      required:
+        - target_plan_code
+    VNPayWebhookPayload:
+      type: object
+      properties:
+        vnp_TxnRef:
+          type: string
+          description: Transaction reference from VNPay
+        vnp_Amount:
+          type: string
+          description: Payment amount
+        vnp_ResponseCode:
+          type: string
+          description: Response code (00 = success)
+        vnp_TransactionStatus:
+          type: string
+          description: Transaction status (00 = success)
+        vnp_OrderInfo:
+          type: string
+          description: Order information
+        vnp_PayDate:
+          type: string
+          description: Payment date
+        vnp_BankCode:
+          type: string
+          description: Bank code
+        vnp_CardType:
+          type: string
+          description: Card type
+      required:
+        - vnp_TxnRef
+        - vnp_Amount
+        - vnp_ResponseCode
+        - vnp_TransactionStatus
+paths:
+  /alerts/escalate:
+    post:
+      summary: Create an escalation request (SMS/Email/Call/Push)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EscalationRequest'
+      responses:
+        '200':
+          description: Escalation queued
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EscalationResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /users/{id}/avatar:
+    post:
+      summary: Upload avatar for user (multipart form)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '200':
+          description: Avatar uploaded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AvatarUploadResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /users/{id}:
+    put:
+      summary: Update user profile
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                phone:
+                  type: string
+                emergencyContacts:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                      phone:
+                        type: string
+      responses:
+        '200':
+          description: User updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /payments/create:
+    post:
+      summary: Create payment/checkout session
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PaymentCreateRequest'
+      responses:
+        '200':
+          description: Payment session created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentCreateResponse'
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /payments/{id}/status:
+    get:
+      summary: Get payment status
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Payment status
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaymentStatusResponse'
+        '404':
+          description: Not found
+  /devices/register:
+    post:
+      summary: Register device/camera
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceRegisterRequest'
+      responses:
+        '200':
+          description: Device registered
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeviceRegisterResponse'
+  /devices/{deviceId}/verify:
+    post:
+      summary: Verify device with OTP or token
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: deviceId
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeviceVerifyRequest'
+      responses:
+        '200':
+          description: verification result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  verified:
+                    type: boolean
+  /devices/{id}/thumbnail:
+    get:
+      summary: Get a thumbnail or presigned URL for a device snapshot
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Thumbnail URL
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ThumbnailResponse'
+        '404':
+          description: Not found
+  /notifications:
+    get:
+      summary: List user notifications (paginated)
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+        - in: query
+          name: limit
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Notifications list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                  total:
+                    type: integer
+  /fcm/token:
+    post:
+      summary: Save FCM token for user/device
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                token:
+                  type: string
+                deviceId:
+                  type: string
+      responses:
+        '200':
+          description: Token saved
+  /fcm/push/message:
+    post:
+      summary: Send push message (server-side triggered)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                to:
+                  type: string
+                title:
+                  type: string
+                body:
+                  type: string
+      responses:
+        '200':
+          description: Message queued
+  /presign/avatar:
+    post:
+      summary: (Optional) Return presigned URL for direct avatar upload (S3)
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                filename:
+                  type: string
+                contentType:
+                  type: string
+      responses:
+        '200':
+          description: Presigned URL
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  url:
+                    type: string
+                  fields:
+                    type: object
+  /payments/webhook:
+    post:
+      summary: Payment gateway webhook endpoint (idempotent)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: accepted
+  # Plans, Payments & Subscription API Endpoints
+  /api/plan:
+    get:
+      summary: Get available plans
+      description: Retrieve list of all available subscription plans
+      tags:
+        - Plans
+      responses:
+        '200':
+          description: List of available plans
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Plan'
+                  timestamp:
+                    type: string
+                    format: date-time
+  /api/plan/current:
+    get:
+      summary: Get current user plan and quota
+      description: Retrieve current subscription plan, quota limits, and usage for authenticated user
+      tags:
+        - Plans
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current plan information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentPlanResponse'
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/transactions:
+    post:
+      summary: Create payment transaction
+      description: Create a new payment transaction with idempotency support
+      tags:
+        - Transactions
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransactionRequest'
+      responses:
+        '200':
+          description: Transaction created successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/TransactionResponse'
+                  timestamp:
+                    type: string
+                    format: date-time
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '409':
+          description: Idempotency key conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+    get:
+      summary: Get user transactions
+      description: Retrieve list of user's payment transactions
+      tags:
+        - Transactions
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: query
+          name: page
+          schema:
+            type: integer
+            default: 1
+          description: Page number
+        - in: query
+          name: limit
+          schema:
+            type: integer
+            default: 20
+          description: Items per page
+      responses:
+        '200':
+          description: List of user transactions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Transaction'
+                      total:
+                        type: integer
+                        example: 42
+                      page:
+                        type: integer
+                        example: 1
+                      limit:
+                        type: integer
+                        example: 20
+                  timestamp:
+                    type: string
+                    format: date-time
+  /api/subscriptions/me:
+    get:
+      summary: Get current user subscription
+      description: Retrieve current subscription details for authenticated user
+      tags:
+        - Subscriptions
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current subscription information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    $ref: '#/components/schemas/Subscription'
+                  timestamp:
+                    type: string
+                    format: date-time
+        '401':
+          description: Unauthorized
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/subscriptions/{subscriptionId}/upgrade:
+    post:
+      summary: Upgrade subscription plan
+      description: Upgrade existing subscription to a new plan with proration calculation
+      tags:
+        - Subscriptions
+      security:
+        - bearerAuth: []
+      parameters:
+        - in: path
+          name: subscriptionId
+          required: true
+          schema:
+            type: string
+          description: Subscription ID to upgrade
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubscriptionUpgradeRequest'
+      responses:
+        '200':
+          description: Subscription upgrade initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: object
+                    properties:
+                      subscription:
+                        $ref: '#/components/schemas/Subscription'
+                      proration_details:
+                        type: object
+                        properties:
+                          amount_due:
+                            type: number
+                            format: float
+                            example: 150000
+                          description:
+                            type: string
+                            example: 'Prorated upgrade to Premium Plan'
+                      payment_required:
+                        type: boolean
+                        example: true
+                  timestamp:
+                    type: string
+                    format: date-time
+        '400':
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '404':
+          description: Subscription not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+  /api/webhooks/vnpay:
+    post:
+      summary: VNPay payment webhook
+      description: Handle VNPay payment gateway webhooks for automatic payment confirmation
+      tags:
+        - Webhooks
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/VNPayWebhookPayload'
+      responses:
+        '200':
+          description: Webhook processed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: 'Payment confirmed successfully'
+                  timestamp:
+                    type: string
+                    format: date-time
+        '400':
+          description: Invalid webhook payload
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+security:
+  - bearerAuth: []

@@ -1,0 +1,20 @@
+# Flutter line ending normalization
+* text=auto
+
+# Treat these as binary (no newline conversion)
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.pdf binary
+
+# Avoid line ending issues for Dart & Flutter
+*.dart text eol=lf
+*.sh text eol=lf
+*.yaml text eol=lf
+*.gradle text eol=lf
+*.kt text eol=lf
+*.java text eol=lf
+*.swift text eol=lf
+*.m text eol=lf
+*.mm text eol=lf
