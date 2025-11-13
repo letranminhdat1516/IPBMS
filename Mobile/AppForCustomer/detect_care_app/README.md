@@ -1,142 +1,217 @@
-# Detect Care — Hệ thống giám sát bệnh nhân bằng AI (AI Patient Monitoring)
+# Detect Care – Hệ thống giám sát bệnh nhân bằng AI
 
-Giải pháp giám sát bệnh nhân thời gian thực sử dụng Computer Vision và AI để phát hiện hành vi bất thường (ngã, co giật, bất động kéo dài) và gửi cảnh báo kịp thời cho nhân viên y tế.
+> Ứng dụng Flutter giúp caregiver và nhân viên y tế theo dõi bệnh nhân theo thời gian thực, nhận cảnh báo khi phát hiện hành vi bất thường và quản lý gói dịch vụ.
 
-> Từ khoá chính (SEO): giám sát bệnh nhân, AI, computer vision, phát hiện ngã, ứng dụng Flutter, backend NestJS, real-time alerts
+## Mục lục
 
----
-
-## Tóm tắt (Meta)
-
-- Mục tiêu: Xây dựng pipeline `Snapshot → Analyze → Alert` cho camera y tế.
-- Đối tượng: bệnh viện, trung tâm chăm sóc, viện dưỡng lão, ứng dụng quản lý caregiver.
-- Kỹ thuật: AI (pose estimation, object detection), Flutter mobile app, REST API, WebSocket cho realtime.
-
----
-
-## Tính năng chính
-
-- Phát hiện hành vi bất thường: ngã, co giật, bất động.
-- Lưu trữ snapshot & metadata (thời gian, camera, confidence).
-- Hệ thống cảnh báo realtime (push/FCM, email, webhooks).
-- Quản lý quyền truy cập: role-based (doctor, nurse, admin, caregiver).
-- Dashboard web & mobile (Flutter) để xem camera, lịch sử, báo cáo.
-- Tùy chỉnh cấu hình hình ảnh và lưu trữ (retention, compression).
+1. [Tổng quan](#tổng-quan)
+2. [Điểm nổi bật](#điểm-nổi-bật)
+3. [Kiến trúc & Luồng dữ liệu](#kiến-trúc--luồng-dữ-liệu)
+4. [Cấu trúc mã nguồn](#cấu-trúc-mã-nguồn)
+5. [Yêu cầu hệ thống](#yêu-cầu-hệ-thống)
+6. [Bắt đầu nhanh](#bắt-đầu-nhanh)
+7. [Lệnh hữu ích](#lệnh-hữu-ích)
+8. [Cấu hình & Môi trường](#cấu-hình--môi-trường)
+9. [Networking & ApiClient](#networking--apiclient)
+10. [Subscription & Payment](#subscription--payment)
+11. [Triển khai & vận hành](#triển-khai--vận-hành)
+12. [Đóng góp](#đóng-góp)
+13. [Tài liệu & liên hệ](#tài-liệu--liên-hệ)
 
 ---
 
-## Kiến trúc hệ thống (ngắn gọn)
+## Tổng quan
 
-- VisionCore (Ingest): thu thập ảnh từ RTSP / HTTP snapshot, enqueue xử lý.
-- VisionAI (Analyze): model phát hiện, pose estimation, trả về JSON (bbox, keypoints, scores).
-- VisionCare (Dashboard): web + mobile client hiển thị luồng, lịch sử, và cảnh báo.
-- Uploads & Storage: lưu ảnh/video vào Cloud (S3/Cloudinary) hoặc NAS.
+Detect Care kết hợp computer vision và AI để phát hiện:
 
-Tech stack gợi ý:
+- Ngã, co giật, bất động kéo dài.
+- Bệnh nhân rời giường, rơi khỏi tầm giám sát.
+- Hoạt động bất thường tại khu vực chăm sóc đặc biệt.
 
-- Frontend: `Flutter` (mobile), `Next.js` (web)
-- Backend: `Node.js`/`NestJS` hoặc `FastAPI` (Python) cho AI
-- Models: `YOLOv8-Pose`, `MediaPipe`, `BLIP-2` cho captioning
-- Database: `Postgres` hoặc `MongoDB`
+Các cảnh báo được gửi về ứng dụng di động, dashboard web, FCM, webhook hoặc email để caregiver phản ứng kịp thời. README này tập trung vào hướng dẫn developer: cài đặt, kiến trúc, chuẩn giao tiếp API và các điểm mở rộng chính.
 
----
+## Điểm nổi bật
 
-## Cài đặt nhanh (Developer)
+- **AI real-time**: mô hình YOLO/Pose xác định sự kiện ngay trong vài trăm ms.
+- **Đa kênh cảnh báo**: FCM push, webhook, email, SMS dự phòng.
+- **Quản lý quyền chặt chẽ**: role doctor/nurse/admin/caregiver với quota camera.
+- **Subscription linh hoạt**: nhiều gói dịch vụ, hỗ trợ nâng cấp/hạ cấp, proration.
+- **Ứng dụng đa nền tảng**: Flutter (iOS/Android/Web/MacOS) + dashboard tùy chọn.
 
-1. Cài Flutter & Dart: [https://flutter.dev](https://flutter.dev)
-2. Clone repository:
+## Kiến trúc & Luồng dữ liệu
+
+1. **VisionCore (Ingest)**
+
+   - Nhận stream RTSP/HTTP, snapshot theo chu kỳ.
+   - Đưa frame vào hàng đợi (Kafka/Redis/AMQP).
+
+2. **VisionAI (Analyze)**
+
+   - Worker chạy mô hình YOLO/Pose, trả về bbox, keypoints, confidence.
+   - Áp dụng business rules (thời gian bất động, vùng nguy hiểm...).
+
+3. **Backend API**
+
+   - REST/WebSocket lưu trữ event, phát cảnh báo, quản lý user, subscription.
+   - Tích hợp thanh toán, webhook, thông báo hệ thống.
+
+4. **Ứng dụng khách**
+
+   - Flutter app cho caregiver/doctor.
+   - Dashboard web (Next.js) cho admin/operations.
+
+5. **Lưu trữ**
+   - Media: S3/Cloudinary/NAS.
+   - Metadata: PostgreSQL hoặc MongoDB.
+   - Quan trắc: Prometheus + Grafana, log forwarding về Elastic/Sentry.
+
+## Cấu trúc mã nguồn
+
+```
+detect_care_app/
+├── lib/
+│   ├── core/              # cấu hình, logger, networking, theme
+│   ├── features/          # mô-đun chức năng (alerts, subscription, media,…)
+│   ├── widgets/           # widget chia sẻ giữa màn hình
+│   └── services/          # lớp dịch vụ hỗ trợ (notification, sms, …)
+├── assets/                # icon, ảnh, lottie...
+├── docs/, openapi/        # tài liệu API, đặc tả endpoint
+├── android/, ios/, web/, macos/, linux/, windows/
+└── tools/, test/, coverage/
+```
+
+Xem thêm từng mô-đun tại `lib/features/<module>`; ví dụ `lib/features/subscription` chứa API, provider, controller, mixin logic cho subscription.
+
+## Yêu cầu hệ thống
+
+- [Flutter](https://flutter.dev) >= 3.19 và Dart tương ứng.
+- Android Studio hoặc Xcode nếu build native.
+- FVM (khuyến nghị) để cố định version Flutter.
+- CLI khác:
+  - `melos` (nếu chạy workspace script tùy chọn).
+  - `firebase-tools` khi cần deploy notifications.
+- Thiết bị thử nghiệm:
+  - iOS 13+, Android 8+, Chrome (web).
+
+Chạy `flutter doctor` để xác nhận môi trường trước khi phát triển.
+
+## Bắt đầu nhanh
 
 ```bash
+# 1. Clone dự án
 git clone <repo-url>
 cd detect_care_app
-```
 
-3. Cài dependencies & chạy app mobile (dev):
-
-```bash
+# 2. Cài dependency
 flutter pub get
+
+# 3. Cấu hình file môi trường (xem thêm phần Cấu hình)
+cp .env.dev .env.local   # hoặc tạo thủ công
+
+# 4. Chạy ứng dụng
 flutter run
-```
 
-4. Chạy tests:
-
-```bash
+# 5. Chạy test
 flutter test
 ```
 
----
+> **Lưu ý:** dự án sử dụng nhiều native plugin. Nếu build thất bại, kiểm tra log Gradle/Xcode hoặc chạy lại `pod install` trong thư mục `ios`.
 
-## Cấp độ tích hợp AI (gợi ý)
+## Lệnh hữu ích
 
-- Level 1 — Motion detection: phát hiện chuyển động và lấy snapshot.
-- Level 2 — Pose estimation: YOLOv8-Pose để phát hiện tư thế và cảnh báo.
-- Level 3 — Context-aware: kết hợp lịch/medical profile để giảm false-positive.
+| Tác vụ                 | Lệnh mẫu                                       |
+| ---------------------- | ---------------------------------------------- |
+| Kiểm tra format & lint | `flutter analyze`                              |
+| Chạy toàn bộ test      | `flutter test`                                 |
+| Chạy test file đơn     | `flutter test test/<file>.dart`                |
+| Theo dõi log AppLogger | Sử dụng DevTools logging / `flutter run -v`    |
+| Build release Android  | `flutter build apk --release`                  |
+| Build ipa (CI)         | `flutter build ipa --export-options-plist ...` |
 
----
+## Cấu hình & Môi trường
 
-## API & Thông tin endpoint (tóm tắt)
+- **AppConfig** (`lib/core/config/app_config.dart`) đọc biến môi trường cho: `apiBaseUrl`, `wsBaseUrl`, `paymentConfig`, v.v.
+- File `.env.dev` chứa ví dụ; tạo `.env.local` hoặc dùng Flutter flavors để tách `dev/staging/prod`.
+- Các khóa quan trọng:
+  - `API_BASE_URL`
+  - `PAYMENT_BASE_URL`
+  - `SENTRY_DSN`, `FIREBASE_*`
+  - `SUPABASE_URL`, `SUPABASE_KEY` (nếu bật module tương ứng)
+- Khi build CI/CD, inject biến môi trường thông qua `--dart-define` hoặc `flutter_dotenv`.
 
-- `GET /api/cameras` — danh sách camera
-- `POST /api/uploads` — upload trực tiếp snapshot
-- `GET /api/events` — lấy sự kiện đã phát hiện
-- `POST /api/assignments` — gán caregiver
+## Networking & ApiClient
 
-Xem thêm tài liệu API trong thư mục `docs/` và `openapi/`.
+Toàn bộ request nội bộ đều đi qua `ApiClient` (`lib/core/network/api_client.dart`):
 
----
-
-## Networking & ApiClient Pattern
-
-Ứng dụng sử dụng `ApiClient` làm lớp trừu tượng cho tất cả các cuộc gọi HTTP đến backend nội bộ. `ApiClient` tự động thêm header Authorization (Bearer token) và xử lý envelope response chuẩn hóa.
-
-### Cách sử dụng
-
-- **Inject ApiClient**: Trong `main.dart`, `ApiClient` được tạo với `tokenProvider` và inject vào các data sources.
-- **ApiProvider interface**: Các service classes nhận `ApiProvider?` để có thể sử dụng `ApiClient` hoặc fallback.
-- **Migration guidance**:
-  - Sử dụng `ApiClient` cho tất cả endpoint backend nội bộ.
-  - Giữ `package:http` trực tiếp chỉ cho third-party services (e.g., Twilio, external APIs).
-  - Khi thêm service mới, inject `ApiProvider` và fallback to `ApiClient(tokenProvider: AuthStorage.getAccessToken)` nếu không được cung cấp.
+- Thêm header Authorization (Bearer) tự động nhờ `AuthStorage.getAccessToken`.
+- Chuẩn hoá response envelope (`{success, data, message}`) và throw exception với nội dung dễ debug.
+- Có thể mock bằng `ApiProvider` trong unit/integration test.
 
 Ví dụ:
 
 ```dart
-class MyService {
-  final ApiProvider? _api;
+class ServicePackageApi {
+  final ApiClient _apiClient;
+  ServicePackageApi()
+      : _apiClient = ApiClient(tokenProvider: AuthStorage.getAccessToken);
 
-  MyService({ApiProvider? api}) : _api = api;
-
-  Future<void> fetchData() async {
-    final provider = _api ?? ApiClient(tokenProvider: AuthStorage.getAccessToken);
-    final response = await provider.get('/my-endpoint');
-    // Xử lý response...
+  Future<List<Plan>> fetchPlans() async {
+    final resp = await _apiClient.get('/plan');
+    final data = _apiClient.extractDataFromResponse(resp);
+    return (data as List).map((e) => Plan.fromJson(e)).toList();
   }
 }
 ```
 
----
+**Gợi ý:** Giữ `package:http` cho dịch vụ bên thứ ba; với backend nội bộ luôn thông qua `ApiClient` để đồng nhất logging, retry, error handling.
+
+## Subscription & Payment
+
+- Logic nằm tại `lib/features/subscription/`:
+  - `data/`: adapter API (`ServicePackageApi`, `PaymentEndpointAdapter`).
+  - `controllers/`: `SubscriptionController` cung cấp API cao cấp cho UI.
+  - `mixins/`: `SubscriptionLogic` gom logic fetch plan, chọn gói, guard payment.
+  - `screens/`: `select_subscription_screen.dart`, `payment/` nắm UI chính.
+- Các bước chính:
+  1. `SubscriptionLogic` tải danh sách gói + subscription hiện tại và xác định gói đang dùng (match theo ID/code/price/name).
+  2. Khi nâng cấp, UI gọi `upgradeSubscription` → server chuẩn bị giao dịch.  
+     Nếu response yêu cầu thanh toán hoặc có `transactionId/payment_url`, app điều hướng đến `PaymentScreen`.
+  3. Đăng ký gói miễn phí gọi thẳng `registerFreePlan`.
+- Logger (`AppLogger.api`) sử dụng tiếng Việt để align với vận hành trong nước; khi debug nên bật filter `Subscription`/`Payment`.
 
 ## Triển khai & vận hành
 
-- Khuyến nghị deploy: Docker + Kubernetes cho backend & ai workers.
-- Giám sát: Prometheus + Grafana cho metrics, Sentry cho lỗi.
-
----
+- **Đóng gói**: backend + worker trong Docker, deploy Kubernetes / ECS.  
+  Ứng dụng Flutter phát hành qua TestFlight, Firebase App Distribution, hoặc cửa hàng chính thức.
+- **Giám sát**:
+  - Metrics: Prometheus + Grafana.
+  - Lỗi: Sentry, Firebase Crashlytics.
+  - Alerting: PagerDuty/Slack webhook từ backend.
+- **Mức độ AI đề xuất**:
+  1. Motion detection cơ bản (level 1).
+  2. Pose estimation (YOLOv8-Pose) cho phát hiện ngã (level 2).
+  3. Context-aware (kết hợp lịch dùng thuốc/hồ sơ bệnh án để giảm false-positive) – level 3.
 
 ## Đóng góp
 
-- Mở PR vào branch `dev`. Tuân thủ lint & unit tests.
-- Thêm mô tả chi tiết cho feature/bugfix và cập nhật `CHANGELOG.md`.
+1. Tạo branch từ `dev`: `feature/<tên>` hoặc `fix/<tên>`.
+2. Giữ commit nhỏ, mô tả rõ.  
+   Chạy `flutter format`, `flutter analyze`, `flutter test` trước khi push.
+3. Mở Pull Request:
+   - Mô tả vấn đề, cách giải quyết, ảnh chụp (nếu UI).
+   - Viết unit test cho logic quan trọng.
+   - Cập nhật README/CHANGELOG khi thay đổi đáng kể.
+
+## Tài liệu & liên hệ
+
+- Tài liệu API: thư mục `docs/` & `openapi/`.
+- Endpoint phổ biến:
+  - `GET /api/cameras`
+  - `GET /api/events`
+  - `POST /api/uploads`
+  - `POST /api/assignments`
+- Liên hệ: `vision-ai-capstone` team — [devteam@example.com](mailto:devteam@example.com)
 
 ---
 
-## Liên hệ
-
-- Maintainer: `vision-ai-capstone` team
-- Email: [devteam@example.com](mailto:devteam@example.com)
-
----
-
-## Ghi chú SEO & từ khoá
-
-- Sử dụng từ khoá: "giám sát bệnh nhân", "phát hiện ngã", "AI chăm sóc sức khỏe", "camera y tế", "real-time alerts" trong phần tiêu đề, mô tả và section headings để cải thiện khả năng tìm thấy trên công cụ tìm kiếm.
+Nếu cần thêm phần hướng dẫn cụ thể (ví dụ thiết lập Firebase, cấu hình CI/CD, hay tích hợp module AI mới), hãy tạo issue hoặc cập nhật README theo template trên.
